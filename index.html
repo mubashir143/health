@@ -1,0 +1,476 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Inspector Data Matcher</title>
+    <!-- SheetJS for processing Excel on client side -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #4F46E5;
+            --primary-light: #818CF8;
+            --bg-color: #0F172A;
+            --surface: rgba(30, 41, 59, 0.7);
+            --text-main: #F8FAFC;
+            --text-muted: #94A3B8;
+            --border-color: rgba(255, 255, 255, 0.1);
+            --success: #10B981;
+            --danger: #EF4444;
+        }
+
+        body {
+            font-family: 'Outfit', sans-serif;
+            background: linear-gradient(135deg, var(--bg-color) 0%, #000000 100%);
+            color: var(--text-main);
+            min-height: 100vh;
+            margin: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 2rem;
+        }
+
+        .container {
+            background: var(--surface);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid var(--border-color);
+            border-radius: 24px;
+            padding: 3rem;
+            width: 100%;
+            max-width: 650px;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+        }
+
+        h1 {
+            margin-top: 0;
+            font-size: 2.2rem;
+            font-weight: 700;
+            background: linear-gradient(to right, var(--primary-light), #C084FC);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 0.5rem;
+            text-align: center;
+        }
+
+        p.subtitle {
+            text-align: center;
+            color: var(--text-muted);
+            margin-bottom: 2.5rem;
+            font-size: 1rem;
+            line-height: 1.5;
+        }
+
+        .form-group {
+            margin-bottom: 2rem;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 0.75rem;
+            font-weight: 500;
+            color: #CBD5E1;
+            font-size: 0.95rem;
+        }
+
+        .file-upload-wrapper {
+            position: relative;
+            width: 100%;
+            height: 140px;
+            border: 2px dashed rgba(148, 163, 184, 0.5);
+            border-radius: 16px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            background: rgba(15, 23, 42, 0.4);
+            cursor: pointer;
+            overflow: hidden;
+        }
+
+        .file-upload-wrapper:hover, .file-upload-wrapper.dragover {
+            border-color: var(--primary-light);
+            background: rgba(79, 70, 229, 0.15);
+            transform: translateY(-2px);
+        }
+
+        .file-upload-wrapper input[type="file"] {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            opacity: 0;
+            cursor: pointer;
+        }
+
+        .file-icon {
+            font-size: 2.5rem;
+            margin-bottom: 0.5rem;
+            transition: transform 0.3s ease;
+        }
+
+        .file-upload-wrapper:hover .file-icon {
+            transform: scale(1.1);
+        }
+
+        .file-name {
+            font-size: 0.9rem;
+            color: var(--text-muted);
+            max-width: 80%;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        button {
+            width: 100%;
+            padding: 1.25rem;
+            border: none;
+            border-radius: 16px;
+            background: linear-gradient(135deg, var(--primary), #6366F1);
+            color: white;
+            font-size: 1.1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            margin-top: 1rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.75rem;
+            box-shadow: 0 4px 6px -1px rgba(79, 70, 229, 0.3);
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 15px -3px rgba(79, 70, 229, 0.4);
+            background: linear-gradient(135deg, #4338CA, var(--primary));
+        }
+
+        button:active {
+            transform: translateY(0);
+        }
+        
+        button:disabled {
+            background: #334155;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+            color: #64748B;
+        }
+
+        .status {
+            margin-top: 1.5rem;
+            padding: 1.25rem;
+            border-radius: 12px;
+            font-size: 0.95rem;
+            display: none;
+            animation: fadeIn 0.3s ease-out forwards;
+            line-height: 1.5;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .status.success {
+            display: block;
+            background: rgba(16, 185, 129, 0.1);
+            color: var(--success);
+            border: 1px solid rgba(16, 185, 129, 0.2);
+        }
+
+        .status.error {
+            display: block;
+            background: rgba(239, 68, 68, 0.1);
+            color: #FCA5A5;
+            border: 1px solid rgba(239, 68, 68, 0.2);
+        }
+
+        .loading-spinner {
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255,255,255,0.3);
+            border-radius: 50%;
+            border-top-color: white;
+            animation: spin 1s linear infinite;
+            display: none;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h1>Inspector Data Matcher</h1>
+        <p class="subtitle">Upload the <strong>Non-Reporting User</strong> and <strong>User Profile</strong> Excel files to automatically analyze and extract Community Health Inspectors' details.</p>
+
+        <div class="form-group">
+            <label>1. Non-Reporting User Excel File</label>
+            <div class="file-upload-wrapper" id="wrapper1">
+                <div class="file-icon">📄</div>
+                <div class="file-name" id="name1">Drag and drop file here, or click to browse</div>
+                <input type="file" id="file1" accept=".xlsx, .xls, .csv" required>
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label>2. User Profile Excel File</label>
+            <div class="file-upload-wrapper" id="wrapper2">
+                <div class="file-icon">👥</div>
+                <div class="file-name" id="name2">Drag and drop file here, or click to browse</div>
+                <input type="file" id="file2" accept=".xlsx, .xls, .csv" required>
+            </div>
+        </div>
+
+        <button id="processBtn">
+            <div class="loading-spinner" id="spinner"></div>
+            <span id="btnText">Process Files and Download Excel</span>
+        </button>
+
+        <div class="status" id="statusBox"></div>
+    </div>
+
+    <script>
+        function setupFileInput(inputId, nameId, wrapperId) {
+            const input = document.getElementById(inputId);
+            const nameDisplay = document.getElementById(nameId);
+            const wrapper = document.getElementById(wrapperId);
+
+            input.addEventListener('change', (e) => {
+                if (e.target.files.length > 0) {
+                    nameDisplay.textContent = e.target.files[0].name;
+                    nameDisplay.style.color = '#F8FAFC';
+                    nameDisplay.style.fontWeight = '600';
+                    wrapper.style.borderColor = 'var(--primary-light)';
+                    wrapper.style.background = 'rgba(79, 70, 229, 0.1)';
+                } else {
+                    nameDisplay.textContent = 'Drag and drop file here, or click to browse';
+                    nameDisplay.style.color = 'var(--text-muted)';
+                    nameDisplay.style.fontWeight = '400';
+                    wrapper.style.borderColor = 'rgba(148, 163, 184, 0.5)';
+                    wrapper.style.background = 'rgba(15, 23, 42, 0.4)';
+                }
+            });
+
+            wrapper.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                wrapper.classList.add('dragover');
+            });
+            wrapper.addEventListener('dragleave', () => {
+                wrapper.classList.remove('dragover');
+            });
+            wrapper.addEventListener('drop', (e) => {
+                e.preventDefault();
+                wrapper.classList.remove('dragover');
+                if (e.dataTransfer.files.length > 0) {
+                    input.files = e.dataTransfer.files;
+                    input.dispatchEvent(new Event('change'));
+                }
+            });
+        }
+
+        setupFileInput('file1', 'name1', 'wrapper1');
+        setupFileInput('file2', 'name2', 'wrapper2');
+
+        const processBtn = document.getElementById('processBtn');
+        const spinner = document.getElementById('spinner');
+        const btnText = document.getElementById('btnText');
+        const statusBox = document.getElementById('statusBox');
+
+        function setStatus(message, type) {
+            statusBox.className = 'status ' + type;
+            statusBox.innerHTML = message;
+        }
+
+        function readExcelFile(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    try {
+                        const data = e.target.result;
+                        const workbook = XLSX.read(data, { type: 'binary' });
+                        const firstSheetName = workbook.SheetNames[0];
+                        const worksheet = workbook.Sheets[firstSheetName];
+                        // Use raw: false to ensure phone numbers and CNICs are read as formatted strings, not scientific numbers
+                        const jsonData = XLSX.utils.sheet_to_json(worksheet, { defval: "", raw: false });
+                        resolve(jsonData);
+                    } catch (err) {
+                        reject(err);
+                    }
+                };
+                reader.onerror = (err) => reject(err);
+                reader.readAsBinaryString(file);
+            });
+        }
+
+        function findKey(obj, possibleNames) {
+            const keys = Object.keys(obj);
+            
+            // First pass: look for exact matches (case-insensitive)
+            for (let pName of possibleNames) {
+                const searchName = pName.toLowerCase();
+                for (let key of keys) {
+                    if (key.toLowerCase() === searchName) return key;
+                }
+            }
+            
+            // Second pass: look for squished exact matches
+            for (let pName of possibleNames) {
+                const normName = pName.toLowerCase().replace(/[^a-z0-9]/g, '');
+                for (let key of keys) {
+                    const normKey = key.toLowerCase().replace(/[^a-z0-9]/g, '');
+                    if (normKey === normName) return key;
+                }
+            }
+            
+            // Third pass: look for includes
+            for (let pName of possibleNames) {
+                const normName = pName.toLowerCase().replace(/[^a-z0-9]/g, '');
+                for (let key of keys) {
+                    const normKey = key.toLowerCase().replace(/[^a-z0-9]/g, '');
+                    // Be careful with includes - e.g. "id" shouldn't match "videoid" if looking for CNIC
+                    if (normName.length > 3 && normKey.includes(normName)) {
+                        return key;
+                    }
+                }
+            }
+            return null;
+        }
+
+        processBtn.addEventListener('click', async () => {
+            const file1 = document.getElementById('file1').files[0];
+            const file2 = document.getElementById('file2').files[0];
+
+            if (!file1 || !file2) {
+                setStatus('<strong>Hold on!</strong> Please upload both Excel files before proceeding.', 'error');
+                return;
+            }
+
+            processBtn.disabled = true;
+            spinner.style.display = 'block';
+            btnText.textContent = 'Analyzing Records...';
+            statusBox.className = 'status';
+
+            try {
+                const nonReportingData = await readExcelFile(file1);
+                const userProfileData = await readExcelFile(file2);
+
+                if (nonReportingData.length === 0) throw new Error("The Non-Reporting User file appears to be empty.");
+                if (userProfileData.length === 0) throw new Error("The User Profile file appears to be empty.");
+
+                const finalData = [];
+                let checkedCount = 0;
+                let matchedDesignationCount = 0;
+
+                for (const row of nonReportingData) {
+                    checkedCount++;
+                    // Find designation key
+                    const designationKey = findKey(row, ['designation', 'role', 'title', 'post']);
+                    
+                    if (designationKey) {
+                        const designationValue = String(row[designationKey]).trim();
+                        // Make lowercase for loose matching, preserving original spacing in case they contain typos but still have 'community' and 'health' etc
+                        const looseDesig = designationValue.toLowerCase();
+                        
+                        // Check if it looks roughly like a community health inspector
+                        // We check for various common spellings/typos of "community"
+                        const communityVariations = ['community', 'cummunity', 'coumunity', 'cumunity', 'comunity'];
+                        const isInspector = communityVariations.some(variant => looseDesig.includes(variant));
+                        const isChi = looseDesig.includes('chi') || looseDesig === 'chi';
+
+                        if (isInspector || isChi) {
+                            matchedDesignationCount++;
+                            
+                            // Find CNIC field - specifically prioritize 'cnicofcadre' for the first file per user instruction
+                            const cnicKey = findKey(row, ['cnicofcadre', 'cnic', 'idm', 'cadrecnic', 'id', 'cadre']);
+                            if (!cnicKey || !row[cnicKey]) continue; 
+
+                            const targetCnic = String(row[cnicKey]).trim();
+                            // Some CNICs might have decimals if read poorly e.g., 34101.0, clean up completely
+                            const normalizeCnic = c => {
+                                let str = String(c).split('.')[0]; // remove decimal part if read as float
+                                return str.replace(/[^0-9]/g, ''); // keep only numbers
+                            };
+                            const normalizedTargetCnic = normalizeCnic(targetCnic);
+
+                            if (!normalizedTargetCnic || normalizedTargetCnic.length < 5) continue; // safety check
+
+                            // Match in user profile data - specifically prioritize 'username' since CNIC is stored there per user instruction
+                            const profileMatch = userProfileData.find(pRow => {
+                                const pCnicKey = findKey(pRow, ['username', 'cnic', 'nationalid', 'idnumber', 'identity', 'id']);
+                                if (!pCnicKey || !pRow[pCnicKey]) return false;
+                                return normalizeCnic(pRow[pCnicKey]) === normalizedTargetCnic;
+                            });
+
+                            if (profileMatch) {
+                                // Extract required fields
+                                
+                                // 1. Phone from profile
+                                const phoneKey = findKey(profileMatch, ['phone', 'contact', 'mobile', 'cell']);
+                                const phone = phoneKey ? String(profileMatch[phoneKey]).trim() : 'Not Available';
+
+                                // 2. Tehsil from non-reporting, fallback to profile
+                                let tehsilKey = findKey(row, ['tehsil', 'district']);
+                                let tehsil = tehsilKey ? row[tehsilKey] : null;
+                                if (!tehsil) {
+                                    let pTehsilKey = findKey(profileMatch, ['tehsil', 'district']);
+                                    tehsil = pTehsilKey ? profileMatch[pTehsilKey] : 'Not Available';
+                                }
+
+                                // 3. Name from non-reporting, fallback to profile
+                                let nameKey = findKey(row, ['name', 'fullname', 'user']);
+                                let name = nameKey ? row[nameKey] : null;
+                                if (!name) {
+                                    let pNameKey = findKey(profileMatch, ['name', 'fullname', 'user']);
+                                    name = pNameKey ? profileMatch[pNameKey] : 'Not Available';
+                                }
+
+                                finalData.push({
+                                    "Tehsil": tehsil,
+                                    "Designation": designationValue,
+                                    "Name": name,
+                                    "CNIC Number": targetCnic,
+                                    "Phone Number": phone
+                                });
+                            }
+                        }
+                    }
+                }
+
+                if (finalData.length === 0) {
+                    if (matchedDesignationCount === 0) {
+                        setStatus(`<strong>No matches found.</strong> Processed ${checkedCount} rows. We couldn't find any designation matching 'Community Health Inspector'. Please check the column name or spelling in the first file.`, 'error');
+                    } else {
+                        setStatus(`<strong>No matches found.</strong> Processed ${checkedCount} rows. Found ${matchedDesignationCount} Community Health Inspectors, but none of their CNICs matched the User Profile file. Ensure CNICs are formatted correctly.`, 'error');
+                    }
+                } else {
+                    const newSheet = XLSX.utils.json_to_sheet(finalData);
+                    const newWorkbook = XLSX.utils.book_new();
+                    XLSX.utils.book_append_sheet(newWorkbook, newSheet, "Compiled Data");
+                    
+                    XLSX.writeFile(newWorkbook, "Community_Health_Inspectors_Report.xlsx");
+                    
+                    setStatus(`<strong>Success!</strong> Found ${matchedDesignationCount} Community Health Inspectors and successfully matched ${finalData.length} of them against profiles. Your new Excel file has been generated!`, 'success');
+                }
+
+            } catch (err) {
+                console.error(err);
+                setStatus('<strong>Error occurred processing files:</strong> ' + err.message, 'error');
+            } finally {
+                processBtn.disabled = false;
+                spinner.style.display = 'none';
+                btnText.textContent = 'Process Files and Download Excel';
+            }
+        });
+    </script>
+</body>
+</html>
