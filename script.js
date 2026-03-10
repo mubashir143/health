@@ -8,7 +8,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Tab Switching Logic
     const tabLinks = document.querySelectorAll('.nav-links li[data-tab]');
-    const tabContents = document.querySelectorAll('.tab-content');
+    const tabContents = document.querySelectorAll('.content-body > .tab-content');
 
     tabLinks.forEach(link => {
         link.addEventListener('click', () => {
@@ -447,4 +447,212 @@ document.addEventListener('DOMContentLoaded', () => {
             </tr>
         `).join('');
     }
+
+    // --- GET CHI NUMBERS LOGIC ---
+    let chiFinalData = [];
+
+    const chiFile1 = document.getElementById('chi-file1');
+    const chiFile2 = document.getElementById('chi-file2');
+    const chiWrapper1 = document.getElementById('chi-wrapper1');
+    const chiWrapper2 = document.getElementById('chi-wrapper2');
+    const chiName1 = document.getElementById('chi-name1');
+    const chiName2 = document.getElementById('chi-name2');
+    const chiProcessBtn = document.getElementById('chi-process-btn');
+    const chiExportBtn = document.getElementById('chi-export-btn');
+    const chiStatus = document.getElementById('chi-status');
+
+    function setupChiFileInput(input, wrapper, nameLabel) {
+        wrapper.addEventListener('click', () => input.click());
+
+        input.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) {
+                nameLabel.innerHTML = `<strong>${e.target.files[0].name}</strong>`;
+                wrapper.classList.add('border-primary');
+            }
+        });
+
+        wrapper.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            wrapper.style.backgroundColor = 'rgba(13, 110, 253, 0.05)';
+        });
+
+        wrapper.addEventListener('dragleave', () => {
+            wrapper.style.backgroundColor = '';
+        });
+
+        wrapper.addEventListener('drop', (e) => {
+            e.preventDefault();
+            wrapper.style.backgroundColor = '';
+            if (e.dataTransfer.files.length > 0) {
+                input.files = e.dataTransfer.files;
+                input.dispatchEvent(new Event('change'));
+            }
+        });
+    }
+
+    setupChiFileInput(chiFile1, chiWrapper1, chiName1);
+    setupChiFileInput(chiFile2, chiWrapper2, chiName2);
+
+    function readExcelAsJSON(file) {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                try {
+                    const data = e.target.result;
+                    const workbook = XLSX.read(data, { type: 'array' });
+                    const firstSheetName = workbook.SheetNames[0];
+                    const worksheet = workbook.Sheets[firstSheetName];
+                    const jsonData = XLSX.utils.sheet_to_json(worksheet, { defval: "", raw: false });
+                    resolve(jsonData);
+                } catch (err) { reject(err); }
+            };
+            reader.onerror = (err) => reject(err);
+            reader.readAsArrayBuffer(file);
+        });
+    }
+
+    function findKey(obj, possibleNames) {
+        if (!obj || typeof obj !== 'object') return null;
+        const keys = Object.keys(obj);
+
+        // 1. Exact or Case-insensitive
+        for (let pName of possibleNames) {
+            const searchName = pName.toLowerCase();
+            for (let key of keys) {
+                if (key.toLowerCase() === searchName) return key;
+            }
+        }
+
+        // 2. Normalized
+        for (let pName of possibleNames) {
+            const normName = pName.toLowerCase().replace(/[^a-z0-9]/g, '');
+            for (let key of keys) {
+                const normKey = key.toLowerCase().replace(/[^a-z0-9]/g, '');
+                if (normKey === normName) return key;
+            }
+        }
+
+        // 3. Includes
+        for (let pName of possibleNames) {
+            const searchName = pName.toLowerCase();
+            if (searchName.length < 3) continue;
+            for (let key of keys) {
+                if (key.toLowerCase().includes(searchName)) return key;
+            }
+        }
+        return null;
+    }
+
+    chiProcessBtn?.addEventListener('click', async () => {
+        const f1 = chiFile1.files[0];
+        const f2 = chiFile2.files[0];
+
+        if (!f1 || !f2) {
+            chiStatus.innerHTML = '<span class="text-danger">Please upload both files.</span>';
+            return;
+        }
+
+        chiProcessBtn.disabled = true;
+        chiProcessBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Processing...';
+        chiStatus.textContent = 'Reading files...';
+
+        try {
+            const nonReportingData = await readExcelAsJSON(f1);
+            const userProfileData = await readExcelAsJSON(f2);
+
+            if (nonReportingData.length === 0 || userProfileData.length === 0) {
+                throw new Error("One or both files appear to be empty.");
+            }
+
+            // identify headers once
+            const r1 = nonReportingData[0];
+            const desigKey = findKey(r1, ['designation', 'role', 'title', 'post', 'category']);
+            const cnicKey1 = findKey(r1, ['cnicofcadre', 'cnic', 'idm', 'cadrecnic', 'id', 'cadre']);
+
+            const r2 = userProfileData[0];
+            const cnicKey2 = findKey(r2, ['username', 'cnic', 'nationalid', 'idnumber', 'identity', 'id']);
+            const phoneKey = findKey(r2, ['phone', 'contact', 'mobile', 'cell', 'number', 'tel', 'whatsapp']);
+
+            if (!desigKey || !cnicKey1 || !cnicKey2) {
+                throw new Error("Could not find required columns (Designation/CNIC) in the uploaded files. Please check headers.");
+            }
+
+            const normalizeCnic = c => String(c || '').split('.')[0].replace(/[^0-9]/g, '');
+
+            nonReportingData.forEach(row => {
+                const desigVal = String(row[desigKey] || '').toLowerCase();
+
+                // Matches "community", "comuntiy", "comunity", "cummunity" + "inspect" or "chi"
+                const hasComm = /comm?un/i.test(desigVal) || /cummun/i.test(desigVal);
+                const hasInsp = /inspec/i.test(desigVal) || /insp/i.test(desigVal);
+                const isInspector = (hasComm && hasInsp) || desigVal.includes('chi') || (hasComm && /health/i.test(desigVal));
+
+                if (isInspector) {
+                    const targetCnic = normalizeCnic(row[cnicKey1]);
+                    if (targetCnic.length < 5) return;
+
+                    const matchProfiles = userProfileData.filter(pRow => normalizeCnic(pRow[cnicKey2]) === targetCnic);
+
+                    matchProfiles.forEach(match => {
+                        const tehKey1 = findKey(row, ['tehsil', 'district', 'area']);
+                        const tehKey2 = findKey(match, ['tehsil', 'district', 'area']);
+                        const nmKey1 = findKey(row, ['name', 'fullname', 'user']);
+                        const nmKey2 = findKey(match, ['name', 'fullname', 'user']);
+
+                        chiFinalData.push({
+                            "Tehsil": (row[tehKey1] || match[tehKey2] || 'N/A'),
+                            "Name": (row[nmKey1] || match[nmKey2] || 'N/A'),
+                            "CNIC": row[cnicKey1],
+                            "Phone Number": (match[phoneKey] || 'N/A')
+                        });
+                    });
+                }
+            });
+
+            // Update UI
+            const resultsBody = document.getElementById('chi-results-body');
+            const countBadge = document.getElementById('chi-count-badge');
+
+            if (chiFinalData.length > 0) {
+                resultsBody.innerHTML = chiFinalData.map(d => `
+                    <tr>
+                        <td class="px-4">${d.Tehsil}</td>
+                        <td>${d.Name}</td>
+                        <td><code class="text-dark">${d["CNIC"]}</code></td>
+                        <td><span class="badge bg-light text-dark border"><i class="fas fa-phone me-1 text-success"></i> ${d["Phone Number"]}</span></td>
+                    </tr>
+                `).join('');
+                countBadge.textContent = `${chiFinalData.length} Matches`;
+                chiStatus.innerHTML = `<span class="text-success">Found ${chiFinalData.length} matches!</span>`;
+                chiExportBtn.disabled = false;
+
+                // Switch to results tab automatically (using Bootstrap Tab API)
+                const resultsTabTrigger = document.getElementById('chi-nav-results');
+                if (resultsTabTrigger) {
+                    const tab = new bootstrap.Tab(resultsTabTrigger);
+                    tab.show();
+                }
+            } else {
+                resultsBody.innerHTML = '<tr><td colspan="4" class="text-center py-5">No matching records found.</td></tr>';
+                countBadge.textContent = '0 Matches';
+                chiStatus.innerHTML = '<span class="text-warning">No matches found between the two files.</span>';
+                chiExportBtn.disabled = true;
+            }
+
+        } catch (err) {
+            console.error(err);
+            chiStatus.innerHTML = `<span class="text-danger">Error: ${err.message}</span>`;
+        } finally {
+            chiProcessBtn.disabled = false;
+            chiProcessBtn.innerHTML = '<i class="fas fa-sync-alt me-2"></i> Process and Match Records';
+        }
+    });
+
+    chiExportBtn?.addEventListener('click', () => {
+        if (chiFinalData.length === 0) return;
+        const newSheet = XLSX.utils.json_to_sheet(chiFinalData);
+        const newWorkbook = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(newWorkbook, newSheet, "Matched CHI");
+        XLSX.writeFile(newWorkbook, "Matched_CHI_Contacts.xlsx");
+    });
 });

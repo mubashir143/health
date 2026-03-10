@@ -441,3 +441,50 @@ body {
         display: none;
     }
 }
+/* File Upload Wrapper & Tool Styles */
+.file-upload-wrapper {
+    position: relative;
+    width: 100%;
+    height: 150px;
+    border: 2px dashed #e3e6f0;
+    border-radius: var(--border-radius);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.3s ease;
+    background: #f8f9fc;
+    cursor: pointer;
+    overflow: hidden;
+    color: var(--secondary-color);
+}
+
+.file-upload-wrapper:hover {
+    border-color: var(--primary-color);
+    background: rgba(78, 115, 223, 0.05);
+    color: var(--primary-color);
+}
+
+.nav-pills .nav-link {
+    border-radius: 30px;
+    padding: 10px 25px;
+    font-weight: 600;
+    color: var(--secondary-color);
+    margin-right: 10px;
+}
+
+.nav-pills .nav-link.active {
+    background: linear-gradient(135deg, #4e73df 0%, #224abe 100%);
+    box-shadow: 0 4px 15px rgba(78, 115, 223, 0.3);
+    color: white;
+}
+
+/* Ensure nested tab content is visible */
+.tab-content .tab-pane.active {
+    display: block !important;
+    opacity: 1 !important;
+}
+.file-upload-wrapper .upload-inner {
+    pointer-events: none;
+}
+
