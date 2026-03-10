@@ -29,6 +29,12 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
 
+    function resetStates() {
+        emptyState.style.display = 'block';
+        dashboardResults.style.display = 'none';
+        loadingState.style.display = 'none';
+    }
+
     function handleFileUpload(e) {
         const file = e.target.files[0];
         if (!file) return;
@@ -158,23 +164,10 @@ document.addEventListener('DOMContentLoaded', () => {
         let roleCol = headers.find(h => {
             const lowerVal = h.toLowerCase();
             return lowerVal.includes('role') || lowerVal.includes('designation') || lowerVal.includes('category') || lowerVal.includes('position');
-        });
-
-        // Fallback: search values to find role column if header name is ambiguous
-        if (!roleCol) {
-            for (let h of headers) {
-                const sampleValues = data.slice(0, 5).map(row => String(row[h]).toLowerCase());
-                if (sampleValues.some(v => v.includes('health') || v.includes('worker') || v.includes('officer'))) {
-                    roleCol = h;
-                    break;
-                }
-            }
-        }
-
-        // If still nothing, default to the second to last column if it exists, otherwise the first
-        if (!roleCol) {
-            roleCol = headers.length > 1 ? headers[headers.length - 2] : headers[0];
-        }
+        }) || headers.find(h => {
+            const sampleValues = data.slice(0, 5).map(row => String(row[h]).toLowerCase());
+            return sampleValues.some(v => v.includes('health') || v.includes('worker') || v.includes('officer'));
+        }) || (headers.length > 1 ? headers[headers.length - 2] : headers[0]);
 
         console.log(`Analyzing: Houses in [${lastCol}], Roles in [${roleCol}]`);
 
@@ -387,8 +380,6 @@ document.addEventListener('DOMContentLoaded', () => {
             if (isCHO) updateSubgroup(groups[uc].cho);
         });
 
-        // Store globally for filtering
-        window.currentUCData = groups;
         renderUCTable(groups);
     }
 

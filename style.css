@@ -96,6 +96,28 @@ body {
     width: 20px;
 }
 
+.nav-links .separator {
+    height: 1px;
+    background-color: rgba(255, 255, 255, 0.1);
+    margin: 10px 20px;
+    padding: 0;
+}
+
+.nav-links .nav-title {
+    padding: 15px 20px 5px;
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    color: rgba(255, 255, 255, 0.4);
+    letter-spacing: 1px;
+}
+
+.nav-links li a.disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    pointer-events: none;
+}
+
 /* Main Content Styling */
 .main-content {
     flex-grow: 1;
