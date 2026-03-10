@@ -75,9 +75,44 @@ document.addEventListener('DOMContentLoaded', () => {
         reader.readAsArrayBuffer(file);
     }
 
-    function resetStates() {
-        loadingState.style.display = 'none';
-        emptyState.style.display = 'block';
+    function levenshteinDistance(a, b) {
+        const matrix = [];
+        for (let i = 0; i <= b.length; i++) {
+            matrix[i] = [i];
+        }
+        for (let j = 0; j <= a.length; j++) {
+            matrix[0][j] = j;
+        }
+        for (let i = 1; i <= b.length; i++) {
+            for (let j = 1; j <= a.length; j++) {
+                if (b.charAt(i - 1) === a.charAt(j - 1)) {
+                    matrix[i][j] = matrix[i - 1][j - 1];
+                } else {
+                    matrix[i][j] = Math.min(
+                        matrix[i - 1][j - 1] + 1,
+                        matrix[i][j - 1] + 1,
+                        matrix[i - 1][j] + 1
+                    );
+                }
+            }
+        }
+        return matrix[b.length][a.length];
+    }
+
+    function similarityRatio(str1, str2) {
+        const maxLen = Math.max(str1.length, str2.length);
+        if (maxLen === 0) return 1;
+        const distance = levenshteinDistance(str1.toLowerCase(), str2.toLowerCase());
+        return (maxLen - distance) / maxLen;
+    }
+
+    function standardizeJobTitles(data, roleCol, standardTitle = 'Community Health Inspector', threshold = 0.8) {
+        data.forEach(row => {
+            const title = String(row[roleCol] || '').trim();
+            if (title && similarityRatio(title, standardTitle) >= threshold) {
+                row[roleCol] = standardTitle;
+            }
+        });
     }
 
     const searchInput = document.querySelector('.search-container input');
@@ -142,6 +177,9 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         console.log(`Analyzing: Houses in [${lastCol}], Roles in [${roleCol}]`);
+
+        // Standardize job titles
+        standardizeJobTitles(data, roleCol);
 
         // Perform calculations
         const analyze = (subset) => {
@@ -402,7 +440,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const rows = [
             { name: 'Overall Users', data: overall, class: 'fw-bold' },
             { name: 'Lady Health Workers (LHW)', data: lhw, class: '' },
-            { name: 'Community Health Officers (CHO)', data: cho, class: '' }
+            { name: 'Community Health Inspector (CHI)', data: cho, class: '' }
         ];
 
         body.innerHTML = rows.map(row => `
