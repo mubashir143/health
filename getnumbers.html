@@ -263,6 +263,14 @@
             </div>
         </div>
 
+        <div class="form-group">
+            <label for="categorySelect">3. Choose inspector category</label>
+            <select id="categorySelect" style="width: 100%; padding: 0.9rem; border-radius: 12px; border: 1px solid rgba(148, 163, 184, 0.7); background: rgba(15, 23, 42, 0.8); color: var(--text-main);">
+                <option value="chi">Community Health Inspector</option>
+                <option value="lhw">Lady Health Worker</option>
+            </select>
+        </div>
+
         <button id="processBtn">
             <div class="loading-spinner" id="spinner"></div>
             <span id="btnText">Process Files and Download Excel</span>
@@ -381,6 +389,9 @@
         processBtn.addEventListener('click', async () => {
             const file1 = document.getElementById('file1').files[0];
             const file2 = document.getElementById('file2').files[0];
+            const selectedCategory = document.getElementById('categorySelect').value;
+            const categoryLabel = selectedCategory === 'lhw' ? 'Lady Health Worker' : 'Community Health Inspector';
+            const outputFileName = selectedCategory === 'lhw' ? 'Lady_Health_Workers_Report.xlsx' : 'Community_Health_Inspectors_Report.xlsx';
 
             if (!file1 || !file2) {
                 setStatus('<strong>Hold on!</strong> Please upload both Excel files before proceeding.', 'error');
@@ -413,14 +424,25 @@
                         // Make lowercase for loose matching, preserving original spacing in case they contain typos but still have 'community' and 'health' etc
                         const looseDesig = designationValue.toLowerCase();
 
-                        // Check if it looks roughly like a community health inspector
-                        // We check for various common spellings/typos of "community"
+                        // Community Health Inspector
                         const communityVariations = ['community', 'cummunity', 'coumunity', 'cumunity', 'comunity'];
-                        const isInspector = communityVariations.some(variant => looseDesig.includes(variant));
-                        const isChi = looseDesig.includes('chi') || looseDesig === 'chi';
+                        const isCommunity = communityVariations.some(variant => looseDesig.includes(variant));
+                        const isChi = looseDesig.includes('chi') || looseDesig === 'chi' || looseDesig.includes('community health inspector');
 
-                        if (isInspector || isChi) {
-                            matchedDesignationCount++;
+                        // Lady Health Worker variants
+                        const lhwVariations = ['lady health worker', 'lady health officer', 'lady health', 'lhw'];
+                        const isLhw = lhwVariations.some(variant => looseDesig.includes(variant));
+
+                        let designationMatches = false;
+                        if (selectedCategory === 'chi') {
+                            designationMatches = (isChi || (isCommunity && !isLhw));
+                        } else if (selectedCategory === 'lhw') {
+                            designationMatches = isLhw;
+                        }
+
+                        if (!designationMatches) continue;
+
+                        matchedDesignationCount++;
 
                             // Find CNIC field - specifically prioritize 'cnicofcadre' for the first file per user instruction
                             const cnicKey = findKey(row, ['cnicofcadre', 'cnic', 'idm', 'cadrecnic', 'id', 'cadre']);
@@ -480,18 +502,18 @@
 
                 if (finalData.length === 0) {
                     if (matchedDesignationCount === 0) {
-                        setStatus(`<strong>No matches found.</strong> Processed ${checkedCount} rows. We couldn't find any designation matching 'Community Health Inspector'. Please check the column name or spelling in the first file.`, 'error');
+                        setStatus(`<strong>No matches found.</strong> Processed ${checkedCount} rows. We couldn't find any designation matching '${categoryLabel}'. Please check the column name or spelling in the first file.`, 'error');
                     } else {
-                        setStatus(`<strong>No matches found.</strong> Processed ${checkedCount} rows. Found ${matchedDesignationCount} Community Health Inspectors, but none of their CNICs matched the User Profile file. Ensure CNICs are formatted correctly.`, 'error');
+                        setStatus(`<strong>No matches found.</strong> Processed ${checkedCount} rows. Found ${matchedDesignationCount} ${categoryLabel}s, but none of their CNICs matched the User Profile file. Ensure CNICs are formatted correctly.`, 'error');
                     }
                 } else {
                     const newSheet = XLSX.utils.json_to_sheet(finalData);
                     const newWorkbook = XLSX.utils.book_new();
                     XLSX.utils.book_append_sheet(newWorkbook, newSheet, "Compiled Data");
 
-                    XLSX.writeFile(newWorkbook, "Community_Health_Inspectors_Report.xlsx");
+                    XLSX.writeFile(newWorkbook, outputFileName);
 
-                    setStatus(`<strong>Success!</strong> Found ${matchedDesignationCount} Community Health Inspectors and successfully matched ${finalData.length} of them against profiles. Your new Excel file has been generated!`, 'success');
+                    setStatus(`<strong>Success!</strong> Found ${matchedDesignationCount} ${categoryLabel}s and successfully matched ${finalData.length} of them against profiles. Your new Excel file has been generated!`, 'success');
                 }
 
             } catch (err) {
