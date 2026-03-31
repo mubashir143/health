@@ -434,18 +434,25 @@ document.addEventListener('DOMContentLoaded', () => {
             { name: 'Community Health Inspector (CHI)', data: cho, class: '' }
         ];
 
-        body.innerHTML = rows.map(row => `
-            <tr class="${row.class}">
-                <td>${row.name}</td>
-                <td>${row.data.totalUsers.toLocaleString()}</td>
-                <td>${row.data.activeUsers.toLocaleString()}</td>
-                <td>${row.data.totalHouses.toLocaleString()}</td>
-                <td>${row.data.dist['0'].toLocaleString()}</td>
-                <td>${row.data.dist['1-5'].toLocaleString()}</td>
-                <td>${row.data.dist['6-10'].toLocaleString()}</td>
-                <td>${row.data.dist['11+'].toLocaleString()}</td>
-            </tr>
-        `).join('');
+        body.innerHTML = rows.map(row => {
+            const nonActivePct = row.data.totalUsers > 0 
+                ? ((row.data.dist['0'] / row.data.totalUsers) * 100).toFixed(2) + '%' 
+                : '0.00%';
+            
+            return `
+                <tr class="${row.class}">
+                    <td>${row.name}</td>
+                    <td>${row.data.totalUsers.toLocaleString()}</td>
+                    <td>${row.data.activeUsers.toLocaleString()}</td>
+                    <td>${row.data.dist['0'].toLocaleString()}</td>
+                    <td class="text-danger fw-bold">${nonActivePct}</td>
+                    <td>${row.data.totalHouses.toLocaleString()}</td>
+                    <td>${row.data.dist['1-5'].toLocaleString()}</td>
+                    <td>${row.data.dist['6-10'].toLocaleString()}</td>
+                    <td>${row.data.dist['11+'].toLocaleString()}</td>
+                </tr>
+            `;
+        }).join('');
     }
 
     // --- GET CHI NUMBERS LOGIC ---
