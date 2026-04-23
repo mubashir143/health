@@ -156,9 +156,9 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function processHealthData(data) {
-        // Find which column is the role column
         const headers = Object.keys(data[0]);
-        const lastCol = headers[headers.length - 1];
+        // Target Column G (7th column, index 6) for House Counts
+        const houseCol = headers[6] || headers[headers.length - 1];
 
         // Find role column: Look for "role", "designation", "category", or common health officer terms
         let roleCol = headers.find(h => {
@@ -169,7 +169,7 @@ document.addEventListener('DOMContentLoaded', () => {
             return sampleValues.some(v => v.includes('health') || v.includes('worker') || v.includes('officer'));
         }) || (headers.length > 1 ? headers[headers.length - 2] : headers[0]);
 
-        console.log(`Analyzing: Houses in [${lastCol}], Roles in [${roleCol}]`);
+        console.log(`Analyzing: Houses in [${houseCol}], Roles in [${roleCol}]`);
 
         // Standardize job titles
         standardizeJobTitles(data, roleCol);
@@ -182,7 +182,7 @@ document.addEventListener('DOMContentLoaded', () => {
             let dist = { '0': 0, '1-5': 0, '6-10': 0, '11+': 0 };
 
             subset.forEach(row => {
-                let houseCount = row[lastCol];
+                let houseCount = row[houseCol];
                 // If the value is "-" or empty, treat as 0
                 if (houseCount === "-" || houseCount === "" || houseCount === undefined || houseCount === null) {
                     houseCount = 0;
@@ -228,7 +228,7 @@ document.addEventListener('DOMContentLoaded', () => {
             roleCounts[r] = (roleCounts[r] || 0) + 1;
         });
 
-        updateDashboard(overallResults, lhwResults, choResults, roleCounts, data, lastCol, roleCol);
+        updateDashboard(overallResults, lhwResults, choResults, roleCounts, data, houseCol, roleCol);
     }
 
     function createMetricCard(label, value, icon, className = '') {
@@ -266,7 +266,7 @@ document.addEventListener('DOMContentLoaded', () => {
         `;
     }
 
-    function updateDashboard(overall, lhw, cho, roleCounts, data, lastCol, roleCol) {
+    function updateDashboard(overall, lhw, cho, roleCounts, data, houseCol, roleCol) {
         // Overall Metrics
         const overallMetricsEl = document.getElementById('overall-metrics');
         overallMetricsEl.innerHTML =
@@ -307,7 +307,7 @@ document.addEventListener('DOMContentLoaded', () => {
         populateSummaryList(overall, lhw, cho);
 
         // Populate UC Analysis Tab
-        populateUCAnalysis(data, lastCol, roleCol);
+        populateUCAnalysis(data, houseCol, roleCol);
 
         // Display dashboard
         loadingState.style.display = 'none';
@@ -435,10 +435,10 @@ document.addEventListener('DOMContentLoaded', () => {
         ];
 
         body.innerHTML = rows.map(row => {
-            const nonActivePct = row.data.totalUsers > 0 
-                ? ((row.data.dist['0'] / row.data.totalUsers) * 100).toFixed(2) + '%' 
+            const nonActivePct = row.data.totalUsers > 0
+                ? ((row.data.dist['0'] / row.data.totalUsers) * 100).toFixed(2) + '%'
                 : '0.00%';
-            
+
             return `
                 <tr class="${row.class}">
                     <td>${row.name}</td>
