@@ -10,6 +10,33 @@ document.addEventListener('DOMContentLoaded', () => {
     const tabLinks = document.querySelectorAll('.nav-links li[data-tab]');
     const tabContents = document.querySelectorAll('.content-body > .tab-content');
 
+    // Mobile Menu Toggle
+    const mobileMenuToggle = document.querySelector('.mobile-menu-toggle');
+    const sidebar = document.querySelector('.sidebar');
+    const sidebarOverlay = document.getElementById('sidebar-overlay');
+
+    if (mobileMenuToggle) {
+        mobileMenuToggle.addEventListener('click', () => {
+            sidebar.classList.toggle('show');
+            sidebarOverlay.classList.toggle('show');
+        });
+
+        sidebarOverlay.addEventListener('click', () => {
+            sidebar.classList.remove('show');
+            sidebarOverlay.classList.remove('show');
+        });
+
+        // Close sidebar on tab click (mobile)
+        tabLinks.forEach(link => {
+            link.addEventListener('click', () => {
+                if (window.innerWidth <= 991) {
+                    sidebar.classList.remove('show');
+                    sidebarOverlay.classList.remove('show');
+                }
+            });
+        });
+    }
+
     tabLinks.forEach(link => {
         link.addEventListener('click', () => {
             const targetTab = link.getAttribute('data-tab');
@@ -661,5 +688,129 @@ document.addEventListener('DOMContentLoaded', () => {
         const newWorkbook = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(newWorkbook, newSheet, "Matched CHI");
         XLSX.writeFile(newWorkbook, "Matched_CHI_Contacts.xlsx");
+    });
+
+    // --- ATTENDANT ANALYSIS LOGIC ---
+    let attFinalData = [];
+
+    const attFile1 = document.getElementById('att-file1');
+    const attFile2 = document.getElementById('att-file2');
+    const attWrapper1 = document.getElementById('att-wrapper1');
+    const attWrapper2 = document.getElementById('att-wrapper2');
+    const attName1 = document.getElementById('att-name1');
+    const attName2 = document.getElementById('att-name2');
+    const attProcessBtn = document.getElementById('att-process-btn');
+    const attExportBtn = document.getElementById('att-export-btn');
+    const attStatus = document.getElementById('att-status');
+
+    if (attWrapper1) setupChiFileInput(attFile1, attWrapper1, attName1);
+    if (attWrapper2) setupChiFileInput(attFile2, attWrapper2, attName2);
+
+    function readExcelAsArray(file) {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                try {
+                    const data = e.target.result;
+                    const workbook = XLSX.read(data, { type: 'array' });
+                    const firstSheetName = workbook.SheetNames[0];
+                    const worksheet = workbook.Sheets[firstSheetName];
+                    // Using header: 1 to get raw arrays for index-based access
+                    const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: "" });
+                    resolve(jsonData);
+                } catch (err) { reject(err); }
+            };
+            reader.onerror = (err) => reject(err);
+            reader.readAsArrayBuffer(file);
+        });
+    }
+
+    attProcessBtn?.addEventListener('click', async () => {
+        const f1 = attFile1.files[0];
+        const f2 = attFile2.files[0];
+
+        if (!f1 || !f2) {
+            attStatus.innerHTML = '<span class="text-danger">Please upload both files for Attendant Analysis.</span>';
+            return;
+        }
+
+        attProcessBtn.disabled = true;
+        attProcessBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Processing...';
+        attStatus.textContent = 'Analyzing data...';
+        attFinalData = [];
+
+        try {
+            const data1 = await readExcelAsArray(f1);
+            const data2 = await readExcelAsArray(f2);
+
+            // Logic: 
+            // File 1: Col E (index 4) = CNIC, Col F (index 5) = Designation
+            // File 2: Col E (index 4) = CNIC, Col G (index 6) = Total Premises
+            
+            // Map File 2 for quick lookup
+            const file2Map = new Map();
+            data2.forEach(row => {
+                const cnic = String(row[4] || '').trim().replace(/[^0-9]/g, '');
+                if (cnic) file2Map.set(cnic, row[6]);
+            });
+
+            const results = [];
+            data1.forEach((row, idx) => {
+                if (idx === 0) return; // Skip header
+
+                const cnicRaw = String(row[4] || '').trim();
+                const cnic = cnicRaw.replace(/[^0-9]/g, '');
+                const designation = String(row[5] || '').toLowerCase();
+
+                if (designation.includes("community health inspector") || designation.includes("chi")) {
+                    const premises = file2Map.has(cnic) ? file2Map.get(cnic) : "(New)";
+                    results.push({ cnic: cnicRaw, premises: premises });
+                }
+            });
+
+            // Sorting: Matched first, then "(New)"
+            results.sort((a, b) => {
+                if (a.premises === "(New)" && b.premises !== "(New)") return 1;
+                if (a.premises !== "(New)" && b.premises === "(New)") return -1;
+                return 0;
+            });
+
+            attFinalData = results;
+
+            // Render
+            const resultsBody = document.getElementById('att-results-body');
+            if (results.length > 0) {
+                resultsBody.innerHTML = results.map(r => `
+                    <tr>
+                        <td class="px-4">${r.cnic}</td>
+                        <td>
+                            ${r.premises === '(New)' 
+                                ? `<span class="badge bg-soft-primary text-primary border border-primary-subtle px-3 py-2"><i class="fas fa-plus-circle me-1"></i> (New)</span>` 
+                                : `<span class="fw-bold text-dark">${r.premises}</span>`}
+                        </td>
+                    </tr>
+                `).join('');
+                attStatus.innerHTML = `<span class="text-success">Processed ${results.length} records successfully!</span>`;
+                attExportBtn.disabled = false;
+            } else {
+                resultsBody.innerHTML = '<tr><td colspan="2" class="text-center py-5">No "Community Health Inspector" found in File 1.</td></tr>';
+                attExportBtn.disabled = true;
+            }
+
+        } catch (err) {
+            console.error(err);
+            attStatus.innerHTML = `<span class="text-danger">Error: ${err.message}</span>`;
+        } finally {
+            attProcessBtn.disabled = false;
+            attProcessBtn.innerHTML = '<i class="fas fa-sync me-2"></i> Process Attendant Data';
+        }
+    });
+
+    attExportBtn?.addEventListener('click', () => {
+        if (attFinalData.length === 0) return;
+        const ws = XLSX.utils.json_to_sheet(attFinalData.map(d => ({ "CNIC": d.cnic, "Total Premises": d.premises })));
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "Attendant");
+        XLSX.writeFile(wb, "Attendant_Analysis.xlsx");
     });
 });
