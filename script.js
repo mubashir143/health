@@ -749,30 +749,88 @@ document.addEventListener('DOMContentLoaded', () => {
             
             // Map File 2 for quick lookup
             const file2Map = new Map();
-            data2.forEach(row => {
+            data2.forEach((row, idx) => {
+                if (idx === 0) return; // Skip header
                 const cnic = String(row[4] || '').trim().replace(/[^0-9]/g, '');
                 if (cnic) file2Map.set(cnic, row[6]);
             });
 
             const results = [];
+            const file1Cnics = new Set(); // Tracks CHIs for Step 1
+            const file1FullMap = new Map(); // Tracks ALL users for metadata lookup
+
+            // Build full map from File 1 first
             data1.forEach((row, idx) => {
-                if (idx === 0) return; // Skip header
-
-                const cnicRaw = String(row[4] || '').trim();
-                const cnic = cnicRaw.replace(/[^0-9]/g, '');
-                const designation = String(row[5] || '').toLowerCase();
-
-                if (designation.includes("community health inspector") || designation.includes("chi")) {
-                    const premises = file2Map.has(cnic) ? file2Map.get(cnic) : "(New)";
-                    results.push({ cnic: cnicRaw, premises: premises });
+                if (idx === 0) return;
+                const cnic = String(row[4] || '').trim().replace(/[^0-9]/g, '');
+                if (cnic) {
+                    file1FullMap.set(cnic, {
+                        tehsil: String(row[1] || '').trim(),
+                        uc: String(row[2] || '').trim(),
+                        name: String(row[3] || '').trim()
+                    });
                 }
             });
 
-            // Sorting: Matched first, then "(New)"
-            results.sort((a, b) => {
-                if (a.premises === "(New)" && b.premises !== "(New)") return 1;
-                if (a.premises !== "(New)" && b.premises === "(New)") return -1;
-                return 0;
+            // 1. Process File 1 (filtered) for Matches and Disables
+            data1.forEach((row, idx) => {
+                if (idx === 0) return; // Skip header
+
+                const designation = String(row[5] || '').toLowerCase();
+                if (designation.includes("community health inspector") || designation.includes("chi")) {
+                    const cnicRaw = String(row[4] || '').trim();
+                    const cnic = cnicRaw.replace(/[^0-9]/g, '');
+                    
+                    file1Cnics.add(cnic);
+
+                    const meta = file1FullMap.get(cnic);
+
+                    if (file2Map.has(cnic)) {
+                        results.push({ 
+                            tehsil: meta.tehsil, uc: meta.uc, nameOfCadre: meta.name, 
+                            cnic: cnicRaw, 
+                            premises: file2Map.get(cnic),
+                            status: "Match"
+                        });
+                    } else {
+                        results.push({ 
+                            tehsil: meta.tehsil, uc: meta.uc, nameOfCadre: meta.name, 
+                            cnic: cnicRaw, 
+                            premises: "0", 
+                            status: "Disable"
+                        });
+                    }
+                }
+            });
+
+            // 2. Process File 2 for "New" records (not in File 1 CHI list)
+            data2.forEach((row, idx) => {
+                if (idx === 0) return; // Skip header
+                const cnicRaw = String(row[4] || '').trim();
+                const cnic = cnicRaw.replace(/[^0-9]/g, '');
+                
+                if (cnic && !file1Cnics.has(cnic)) {
+                    // Try to get metadata from File 1 first
+                    let meta = file1FullMap.get(cnic);
+                    
+                    // If not in File 1, pick info from File 2 (Current row)
+                    if (!meta) {
+                        meta = {
+                            tehsil: String(row[1] || '').trim() || "N/A",
+                            uc: String(row[2] || '').trim() || "N/A",
+                            name: String(row[3] || '').trim() || "N/A"
+                        };
+                    }
+
+                    results.push({
+                        tehsil: meta.tehsil,
+                        uc: meta.uc,
+                        nameOfCadre: meta.name,
+                        cnic: cnicRaw,
+                        premises: row[6] || "0",
+                        status: "New"
+                    });
+                }
             });
 
             attFinalData = results;
@@ -780,20 +838,26 @@ document.addEventListener('DOMContentLoaded', () => {
             // Render
             const resultsBody = document.getElementById('att-results-body');
             if (results.length > 0) {
-                resultsBody.innerHTML = results.map(r => `
+                resultsBody.innerHTML = results.map(r => {
+                    let statusBadge = '';
+                    if (r.status === 'Match') statusBadge = '<span class="badge bg-success px-2">Match</span>';
+                    else if (r.status === 'New') statusBadge = '<span class="badge bg-primary px-2">New</span>';
+                    else if (r.status === 'Disable') statusBadge = '<span class="badge bg-danger px-2">Disable</span>';
+
+                    return `
                     <tr>
-                        <td class="px-4">${r.cnic}</td>
-                        <td>
-                            ${r.premises === '(New)' 
-                                ? `<span class="badge bg-soft-primary text-primary border border-primary-subtle px-3 py-2"><i class="fas fa-plus-circle me-1"></i> (New)</span>` 
-                                : `<span class="fw-bold text-dark">${r.premises}</span>`}
-                        </td>
+                        <td class="px-4">${r.tehsil}</td>
+                        <td>${r.uc}</td>
+                        <td>${r.nameOfCadre}</td>
+                        <td>${r.cnic}</td>
+                        <td class="fw-bold">${r.premises}</td>
+                        <td>${statusBadge}</td>
                     </tr>
-                `).join('');
+                `;}).join('');
                 attStatus.innerHTML = `<span class="text-success">Processed ${results.length} records successfully!</span>`;
                 attExportBtn.disabled = false;
             } else {
-                resultsBody.innerHTML = '<tr><td colspan="2" class="text-center py-5">No "Community Health Inspector" found in File 1.</td></tr>';
+                resultsBody.innerHTML = '<tr><td colspan="6" class="text-center py-5">No records found.</td></tr>';
                 attExportBtn.disabled = true;
             }
 
@@ -808,9 +872,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
     attExportBtn?.addEventListener('click', () => {
         if (attFinalData.length === 0) return;
-        const ws = XLSX.utils.json_to_sheet(attFinalData.map(d => ({ "CNIC": d.cnic, "Total Premises": d.premises })));
+        const ws = XLSX.utils.json_to_sheet(attFinalData.map(d => ({ 
+            "Tehsil": d.tehsil,
+            "UC": d.uc,
+            "Name of Cadre": d.nameOfCadre,
+            "CNIC": d.cnic, 
+            "Total Premises": d.premises,
+            "Status": d.status
+        })));
         const wb = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(wb, ws, "Attendant");
+        XLSX.utils.book_append_sheet(wb, ws, "Analysis Results");
         XLSX.writeFile(wb, "Attendant_Analysis.xlsx");
     });
 });
