@@ -10,6 +10,33 @@ document.addEventListener('DOMContentLoaded', () => {
     const tabLinks = document.querySelectorAll('.nav-links li[data-tab]');
     const tabContents = document.querySelectorAll('.content-body > .tab-content');
 
+    // Mobile Menu Toggle
+    const mobileMenuToggle = document.querySelector('.mobile-menu-toggle');
+    const sidebar = document.querySelector('.sidebar');
+    const sidebarOverlay = document.getElementById('sidebar-overlay');
+
+    if (mobileMenuToggle) {
+        mobileMenuToggle.addEventListener('click', () => {
+            sidebar.classList.toggle('show');
+            sidebarOverlay.classList.toggle('show');
+        });
+
+        sidebarOverlay.addEventListener('click', () => {
+            sidebar.classList.remove('show');
+            sidebarOverlay.classList.remove('show');
+        });
+
+        // Close sidebar on tab click (mobile)
+        tabLinks.forEach(link => {
+            link.addEventListener('click', () => {
+                if (window.innerWidth <= 991) {
+                    sidebar.classList.remove('show');
+                    sidebarOverlay.classList.remove('show');
+                }
+            });
+        });
+    }
+
     tabLinks.forEach(link => {
         link.addEventListener('click', () => {
             const targetTab = link.getAttribute('data-tab');
@@ -661,5 +688,200 @@ document.addEventListener('DOMContentLoaded', () => {
         const newWorkbook = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(newWorkbook, newSheet, "Matched CHI");
         XLSX.writeFile(newWorkbook, "Matched_CHI_Contacts.xlsx");
+    });
+
+    // --- ATTENDANT ANALYSIS LOGIC ---
+    let attFinalData = [];
+
+    const attFile1 = document.getElementById('att-file1');
+    const attFile2 = document.getElementById('att-file2');
+    const attWrapper1 = document.getElementById('att-wrapper1');
+    const attWrapper2 = document.getElementById('att-wrapper2');
+    const attName1 = document.getElementById('att-name1');
+    const attName2 = document.getElementById('att-name2');
+    const attProcessBtn = document.getElementById('att-process-btn');
+    const attExportBtn = document.getElementById('att-export-btn');
+    const attStatus = document.getElementById('att-status');
+
+    if (attWrapper1) setupChiFileInput(attFile1, attWrapper1, attName1);
+    if (attWrapper2) setupChiFileInput(attFile2, attWrapper2, attName2);
+
+    function readExcelAsArray(file) {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                try {
+                    const data = e.target.result;
+                    const workbook = XLSX.read(data, { type: 'array' });
+                    const firstSheetName = workbook.SheetNames[0];
+                    const worksheet = workbook.Sheets[firstSheetName];
+                    // Using header: 1 to get raw arrays for index-based access
+                    const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: "" });
+                    resolve(jsonData);
+                } catch (err) { reject(err); }
+            };
+            reader.onerror = (err) => reject(err);
+            reader.readAsArrayBuffer(file);
+        });
+    }
+
+    attProcessBtn?.addEventListener('click', async () => {
+        const f1 = attFile1.files[0];
+        const f2 = attFile2.files[0];
+
+        if (!f1 || !f2) {
+            attStatus.innerHTML = '<span class="text-danger">Please upload both files for Attendant Analysis.</span>';
+            return;
+        }
+
+        attProcessBtn.disabled = true;
+        attProcessBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Processing...';
+        attStatus.textContent = 'Analyzing data...';
+        attFinalData = [];
+
+        try {
+            const data1 = await readExcelAsArray(f1);
+            const data2 = await readExcelAsArray(f2);
+
+            // Logic: 
+            // File 1: Col E (index 4) = CNIC, Col F (index 5) = Designation
+            // File 2: Col E (index 4) = CNIC, Col G (index 6) = Total Premises
+            
+            // Map File 2 for quick lookup
+            const file2Map = new Map();
+            data2.forEach((row, idx) => {
+                if (idx === 0) return; // Skip header
+                const cnic = String(row[4] || '').trim().replace(/[^0-9]/g, '');
+                if (cnic) file2Map.set(cnic, row[6]);
+            });
+
+            const results = [];
+            const file1Cnics = new Set(); // Tracks CHIs for Step 1
+            const file1FullMap = new Map(); // Tracks ALL users for metadata lookup
+
+            // Build full map from File 1 first
+            data1.forEach((row, idx) => {
+                if (idx === 0) return;
+                const cnic = String(row[4] || '').trim().replace(/[^0-9]/g, '');
+                if (cnic) {
+                    file1FullMap.set(cnic, {
+                        tehsil: String(row[1] || '').trim(),
+                        uc: String(row[2] || '').trim(),
+                        name: String(row[3] || '').trim()
+                    });
+                }
+            });
+
+            // 1. Process File 1 (filtered) for Matches and Disables
+            data1.forEach((row, idx) => {
+                if (idx === 0) return; // Skip header
+
+                const designation = String(row[5] || '').toLowerCase();
+                if (designation.includes("community health inspector") || designation.includes("chi")) {
+                    const cnicRaw = String(row[4] || '').trim();
+                    const cnic = cnicRaw.replace(/[^0-9]/g, '');
+                    
+                    file1Cnics.add(cnic);
+
+                    const meta = file1FullMap.get(cnic);
+
+                    if (file2Map.has(cnic)) {
+                        results.push({ 
+                            tehsil: meta.tehsil, uc: meta.uc, nameOfCadre: meta.name, 
+                            cnic: cnicRaw, 
+                            premises: file2Map.get(cnic),
+                            status: "Match"
+                        });
+                    } else {
+                        results.push({ 
+                            tehsil: meta.tehsil, uc: meta.uc, nameOfCadre: meta.name, 
+                            cnic: cnicRaw, 
+                            premises: "0", 
+                            status: "Disable"
+                        });
+                    }
+                }
+            });
+
+            // 2. Process File 2 for "New" records (not in File 1 CHI list)
+            data2.forEach((row, idx) => {
+                if (idx === 0) return; // Skip header
+                const cnicRaw = String(row[4] || '').trim();
+                const cnic = cnicRaw.replace(/[^0-9]/g, '');
+                
+                if (cnic && !file1Cnics.has(cnic)) {
+                    // Try to get metadata from File 1 first
+                    let meta = file1FullMap.get(cnic);
+                    
+                    // If not in File 1, pick info from File 2 (Current row)
+                    if (!meta) {
+                        meta = {
+                            tehsil: String(row[1] || '').trim() || "N/A",
+                            uc: String(row[2] || '').trim() || "N/A",
+                            name: String(row[3] || '').trim() || "N/A"
+                        };
+                    }
+
+                    results.push({
+                        tehsil: meta.tehsil,
+                        uc: meta.uc,
+                        nameOfCadre: meta.name,
+                        cnic: cnicRaw,
+                        premises: row[6] || "0",
+                        status: "New"
+                    });
+                }
+            });
+
+            attFinalData = results;
+
+            // Render
+            const resultsBody = document.getElementById('att-results-body');
+            if (results.length > 0) {
+                resultsBody.innerHTML = results.map(r => {
+                    let statusBadge = '';
+                    if (r.status === 'Match') statusBadge = '<span class="badge bg-success px-2">Match</span>';
+                    else if (r.status === 'New') statusBadge = '<span class="badge bg-primary px-2">New</span>';
+                    else if (r.status === 'Disable') statusBadge = '<span class="badge bg-danger px-2">Disable</span>';
+
+                    return `
+                    <tr>
+                        <td class="px-4">${r.tehsil}</td>
+                        <td>${r.uc}</td>
+                        <td>${r.nameOfCadre}</td>
+                        <td>${r.cnic}</td>
+                        <td class="fw-bold">${r.premises}</td>
+                        <td>${statusBadge}</td>
+                    </tr>
+                `;}).join('');
+                attStatus.innerHTML = `<span class="text-success">Processed ${results.length} records successfully!</span>`;
+                attExportBtn.disabled = false;
+            } else {
+                resultsBody.innerHTML = '<tr><td colspan="6" class="text-center py-5">No records found.</td></tr>';
+                attExportBtn.disabled = true;
+            }
+
+        } catch (err) {
+            console.error(err);
+            attStatus.innerHTML = `<span class="text-danger">Error: ${err.message}</span>`;
+        } finally {
+            attProcessBtn.disabled = false;
+            attProcessBtn.innerHTML = '<i class="fas fa-sync me-2"></i> Process Attendant Data';
+        }
+    });
+
+    attExportBtn?.addEventListener('click', () => {
+        if (attFinalData.length === 0) return;
+        const ws = XLSX.utils.json_to_sheet(attFinalData.map(d => ({ 
+            "Tehsil": d.tehsil,
+            "UC": d.uc,
+            "Name of Cadre": d.nameOfCadre,
+            "CNIC": d.cnic, 
+            "Total Premises": d.premises,
+            "Status": d.status
+        })));
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "Analysis Results");
+        XLSX.writeFile(wb, "Attendant_Analysis.xlsx");
     });
 });
