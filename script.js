@@ -884,4 +884,170 @@ document.addEventListener('DOMContentLoaded', () => {
         XLSX.utils.book_append_sheet(wb, ws, "Analysis Results");
         XLSX.writeFile(wb, "Attendant_Analysis.xlsx");
     });
+
+    // --- MULTI-FILE SUMMARY LOGIC ---
+    const multiFileInput = document.getElementById('multi-excel-upload');
+    const multiFileStatus = document.getElementById('multi-file-status');
+    const multiSummaryContainer = document.getElementById('multi-summary-container');
+
+    multiFileInput?.addEventListener('change', async (e) => {
+        const files = Array.from(e.target.files);
+        if (files.length === 0) return;
+
+        multiFileStatus.innerHTML = `<span class="spinner-border spinner-border-sm me-2"></span>Processing ${files.length} file(s)...`;
+        multiSummaryContainer.innerHTML = '';
+
+        for (let i = 0; i < files.length; i++) {
+            const file = files[i];
+            try {
+                const jsonData = await readExcelAsJSON(file);
+                if (jsonData && jsonData.length > 0) {
+                    const summaryData = calculateSummaryForFile(jsonData);
+                    renderSummaryCard(file.name, summaryData, i);
+                } else {
+                    renderErrorCard(file.name, "File appears to be empty.");
+                }
+            } catch (err) {
+                renderErrorCard(file.name, err.message);
+            }
+        }
+        
+        multiFileStatus.innerHTML = `<span class="text-success">Finished processing ${files.length} file(s).</span>`;
+        multiFileInput.value = ''; // Reset input
+    });
+
+    function calculateSummaryForFile(data) {
+        const headers = Object.keys(data[0]);
+        const houseCol = headers[6] || headers[headers.length - 1];
+        
+        let roleCol = headers.find(h => {
+            const lowerVal = h.toLowerCase();
+            return lowerVal.includes('role') || lowerVal.includes('designation') || lowerVal.includes('category') || lowerVal.includes('position');
+        }) || headers.find(h => {
+            const sampleValues = data.slice(0, 5).map(row => String(row[h]).toLowerCase());
+            return sampleValues.some(v => v.includes('health') || v.includes('worker') || v.includes('officer'));
+        }) || (headers.length > 1 ? headers[headers.length - 2] : headers[0]);
+
+        standardizeJobTitles(data, roleCol);
+
+        const analyze = (subset) => {
+            const totalUsers = subset.length;
+            let activeUsers = 0;
+            let totalHouses = 0;
+            let dist = { '0': 0, '1-5': 0, '6-10': 0, '11+': 0 };
+
+            subset.forEach(row => {
+                let houseCount = row[houseCol];
+                if (houseCount === "-" || houseCount === "" || houseCount === undefined || houseCount === null) {
+                    houseCount = 0;
+                } else {
+                    houseCount = parseInt(houseCount) || 0;
+                }
+
+                totalHouses += houseCount;
+
+                if (houseCount !== 0) activeUsers++;
+
+                if (houseCount === 0) dist['0']++;
+                else if (houseCount >= 1 && houseCount <= 5) dist['1-5']++;
+                else if (houseCount >= 6 && houseCount <= 10) dist['6-10']++;
+                else if (houseCount >= 11) dist['11+']++;
+            });
+
+            return { totalUsers, activeUsers, totalHouses, dist };
+        };
+
+        const LHW_KEYWORDS = ['lady health worker', 'lhw'];
+        const CHO_KEYWORDS = ['community health officer', 'cho', 'chi', 'community health inspector'];
+
+        const lhwData = data.filter(row => {
+            const val = String(row[roleCol] || '').toLowerCase();
+            return LHW_KEYWORDS.some(k => val.includes(k));
+        });
+
+        const choData = data.filter(row => {
+            const val = String(row[roleCol] || '').toLowerCase();
+            return CHO_KEYWORDS.some(k => val.includes(k));
+        });
+
+        return {
+            overall: analyze(data),
+            lhw: analyze(lhwData),
+            cho: analyze(choData)
+        };
+    }
+
+    function renderSummaryCard(fileName, results, index) {
+        const rows = [
+            { name: 'Overall Users', data: results.overall, class: 'fw-bold' },
+            { name: 'Lady Health Workers (LHW)', data: results.lhw, class: '' },
+            { name: 'Community Health Inspector (CHI)', data: results.cho, class: '' }
+        ];
+
+        const tbodyHTML = rows.map(row => {
+            const nonActivePct = row.data.totalUsers > 0
+                ? ((row.data.dist['0'] / row.data.totalUsers) * 100).toFixed(2) + '%'
+                : '0.00%';
+
+            return `
+                <tr class="${row.class}">
+                    <td>${row.name}</td>
+                    <td>${row.data.totalUsers.toLocaleString()}</td>
+                    <td>${row.data.activeUsers.toLocaleString()}</td>
+                    <td>${row.data.dist['0'].toLocaleString()}</td>
+                    <td class="text-danger fw-bold">${nonActivePct}</td>
+                    <td>${row.data.totalHouses.toLocaleString()}</td>
+                    <td>${row.data.dist['1-5'].toLocaleString()}</td>
+                    <td>${row.data.dist['6-10'].toLocaleString()}</td>
+                    <td>${row.data.dist['11+'].toLocaleString()}</td>
+                </tr>
+            `;
+        }).join('');
+
+        const cardHTML = `
+            <div class="dashboard-card mb-4">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h3 class="card-title text-primary"><i class="fas fa-file-excel me-2"></i> ${fileName}</h3>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Category</th>
+                                    <th>Total Users</th>
+                                    <th>Active Users</th>
+                                    <th>0 Houses</th>
+                                    <th>non active user %</th>
+                                    <th>Total Houses</th>
+                                    <th>1-5 Houses</th>
+                                    <th>6-10 Houses</th>
+                                    <th>11+ Houses</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${tbodyHTML}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        multiSummaryContainer.insertAdjacentHTML('beforeend', cardHTML);
+    }
+
+    function renderErrorCard(fileName, errorMessage) {
+        const cardHTML = `
+            <div class="dashboard-card mb-4 border-danger">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h3 class="card-title text-danger"><i class="fas fa-exclamation-triangle me-2"></i> ${fileName}</h3>
+                </div>
+                <div class="card-body">
+                    <p class="text-danger mb-0">${errorMessage}</p>
+                </div>
+            </div>
+        `;
+        multiSummaryContainer.insertAdjacentHTML('beforeend', cardHTML);
+    }
 });

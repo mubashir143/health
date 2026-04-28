@@ -38,6 +38,8 @@
                         Dashboard</a></li>
                 <li data-tab="summary"><a href="javascript:void(0)"><i class="fas fa-list-check"></i> Summary List</a>
                 </li>
+                <li data-tab="multi-summary"><a href="javascript:void(0)"><i class="fas fa-layer-group"></i> Multi-File Summary</a>
+                </li>
                 <li data-tab="uc-wise"><a href="javascript:void(0)"><i class="fas fa-map-location-dot"></i> UC
                         Analysis</a></li>
                 <li data-tab="datalist"><a href="javascript:void(0)"><i class="fas fa-table"></i> Data List</a></li>
@@ -197,6 +199,34 @@
                                 </table>
                             </div>
                         </div>
+                    </div>
+                </div>
+
+                <!-- Tab: Multi-File Summary List -->
+                <div id="tab-multi-summary" class="tab-content" style="display: none;">
+                    <section class="welcome-section mb-4">
+                        <h1 class="welcome-title text-gradient">Multi-File Summary</h1>
+                        <p class="text-muted">Upload multiple files to calculate and view a summary for each file separately.</p>
+                    </section>
+
+                    <div class="row mb-4">
+                        <div class="col-12">
+                            <div class="dashboard-card">
+                                <div class="card-body py-5">
+                                    <div class="upload-button-wrapper text-center">
+                                        <label for="multi-excel-upload" class="btn btn-primary btn-lg btn-upload shadow-lg px-5">
+                                            <i class="fas fa-cloud-upload-alt me-2"></i> Upload Multiple Files
+                                        </label>
+                                        <input type="file" id="multi-excel-upload" accept=".xlsx, .xls, .csv" multiple hidden>
+                                        <div id="multi-file-status" class="mt-3 text-muted"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="multi-summary-container">
+                        <!-- JS will inject summary tables for each file here -->
                     </div>
                 </div>
 
