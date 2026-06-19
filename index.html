@@ -228,6 +228,27 @@
                     <div id="multi-summary-container">
                         <!-- JS will inject summary tables for each file here -->
                     </div>
+
+                    <!-- Copy All for Excel Component — shown after files are processed -->
+                    <div id="multi-copy-btn-wrapper" style="display:none;" class="mb-5">
+                        <div class="copy-banner-card">
+                            <div class="copy-banner-info">
+                                <div class="copy-banner-icon">
+                                    <i class="fas fa-file-excel"></i>
+                                </div>
+                                <div class="copy-banner-text">
+                                    <h4>Ready for Excel Sheet Compilation</h4>
+                                    <p>Click copy button to copy all processed data summaries formatted for immediate paste (Ctrl+V) into Excel.</p>
+                                </div>
+                            </div>
+                            <div class="d-flex flex-column align-items-center align-items-md-end">
+                                <button id="multi-copy-all-btn" class="btn-premium-copy">
+                                    <i class="fas fa-copy"></i> Copy All for Excel
+                                </button>
+                                <div id="multi-copy-feedback" class="copy-feedback-toast"></div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
 
                 <!-- Tab: UC Analysis -->

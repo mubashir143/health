@@ -889,6 +889,12 @@ document.addEventListener('DOMContentLoaded', () => {
     const multiFileInput = document.getElementById('multi-excel-upload');
     const multiFileStatus = document.getElementById('multi-file-status');
     const multiSummaryContainer = document.getElementById('multi-summary-container');
+    const multiCopyBtnWrapper = document.getElementById('multi-copy-btn-wrapper');
+    const multiCopyAllBtn = document.getElementById('multi-copy-all-btn');
+    const multiCopyFeedback = document.getElementById('multi-copy-feedback');
+
+    // Stores data for all processed files so the copy button can access it
+    let allFileSummaries = [];
 
     multiFileInput?.addEventListener('change', async (e) => {
         const files = Array.from(e.target.files);
@@ -896,6 +902,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
         multiFileStatus.innerHTML = `<span class="spinner-border spinner-border-sm me-2"></span>Processing ${files.length} file(s)...`;
         multiSummaryContainer.innerHTML = '';
+        multiCopyBtnWrapper.style.display = 'none';
+        multiCopyFeedback.textContent = '';
+        allFileSummaries = [];
 
         for (let i = 0; i < files.length; i++) {
             const file = files[i];
@@ -904,6 +913,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (jsonData && jsonData.length > 0) {
                     const summaryData = calculateSummaryForFile(jsonData);
                     renderSummaryCard(file.name, summaryData, i);
+                    allFileSummaries.push({ fileName: file.name, results: summaryData });
                 } else {
                     renderErrorCard(file.name, "File appears to be empty.");
                 }
@@ -914,6 +924,86 @@ document.addEventListener('DOMContentLoaded', () => {
         
         multiFileStatus.innerHTML = `<span class="text-success">Finished processing ${files.length} file(s).</span>`;
         multiFileInput.value = ''; // Reset input
+
+        // Show copy button only if we have at least one successful result
+        if (allFileSummaries.length > 0) {
+            multiCopyBtnWrapper.style.display = 'block';
+        }
+    });
+
+    // --- COPY ALL FOR EXCEL ---
+    multiCopyAllBtn?.addEventListener('click', () => {
+        if (allFileSummaries.length === 0) return;
+
+        const HEADERS = [
+            'Category',
+            'Total Users',
+            'Active Users',
+            '0 Houses',
+            'Non Active User %',
+            'Total Houses',
+            '1-5 Houses',
+            '6-10 Houses',
+            '11+ Houses'
+        ];
+
+        const buildRow = (rowName, data) => {
+            const nonActivePct = data.totalUsers > 0
+                ? ((data.dist['0'] / data.totalUsers) * 100).toFixed(2) + '%'
+                : '0.00%';
+            return [
+                rowName,
+                data.totalUsers,
+                data.activeUsers,
+                data.dist['0'],
+                nonActivePct,
+                data.totalHouses,
+                data.dist['1-5'],
+                data.dist['6-10'],
+                data.dist['11+']
+            ].join('\t');
+        };
+
+        const tsvLines = [];
+
+        allFileSummaries.forEach(({ fileName, results }, idx) => {
+            // Blank separator between blocks (skip for first)
+            if (idx > 0) tsvLines.push('');
+
+            // File title row
+            tsvLines.push(fileName);
+
+            // Column headers
+            tsvLines.push(HEADERS.join('\t'));
+
+            // Data rows
+            tsvLines.push(buildRow('Overall Users', results.overall));
+            tsvLines.push(buildRow('Lady Health Workers (LHW)', results.lhw));
+            tsvLines.push(buildRow('Community Health Inspector (CHI)', results.cho));
+        });
+
+        const tsvText = tsvLines.join('\n');
+
+        const showSuccess = () => {
+            multiCopyFeedback.innerHTML = `<i class="fas fa-check-circle me-1"></i> Copied! Ready to paste (Ctrl+V) into Excel.`;
+            multiCopyFeedback.classList.add('show');
+            setTimeout(() => {
+                multiCopyFeedback.classList.remove('show');
+            }, 4000);
+        };
+
+        navigator.clipboard.writeText(tsvText).then(showSuccess).catch(() => {
+            // Fallback for browsers that block clipboard API
+            const ta = document.createElement('textarea');
+            ta.value = tsvText;
+            ta.style.position = 'fixed';
+            ta.style.opacity = '0';
+            document.body.appendChild(ta);
+            ta.select();
+            document.execCommand('copy');
+            document.body.removeChild(ta);
+            showSuccess();
+        });
     });
 
     function calculateSummaryForFile(data) {
