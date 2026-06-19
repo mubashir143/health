@@ -685,3 +685,32 @@ body {
         justify-content: center;
     }
 }
+
+/* Sticky column styles for dark table headers */
+thead th.sticky-column {
+    background-color: #212529 !important;
+    color: #fff !important;
+}
+
+/* Ensure horizontal scroll borders are visible on sticky columns */
+.table-bordered > :not(caption) > * > .sticky-column {
+    border-right-width: 2px;
+    border-right-color: #e3e6f0 !important;
+}
+
+/* Custom Form Styling for Premium Filters */
+#global-filter-card select, 
+#global-filter-card input {
+    border: 1px solid #e3e6f0;
+    border-radius: 8px;
+    background-color: #f8f9fc;
+    color: #495057;
+    transition: all 0.2s ease-in-out;
+}
+
+#global-filter-card select:focus, 
+#global-filter-card input:focus {
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 0.2rem rgba(78, 115, 223, 0.15);
+    background-color: #fff;
+}

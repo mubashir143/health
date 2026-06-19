@@ -36,7 +36,9 @@
             <ul class="nav-links">
                 <li class="active" data-tab="dashboard"><a href="javascript:void(0)"><i class="fas fa-chart-line"></i>
                         Dashboard</a></li>
-                <li data-tab="summary"><a href="javascript:void(0)"><i class="fas fa-list-check"></i> Summary List</a>
+                <li data-tab="summary"><a href="javascript:void(0)"><i class="fas fa-list-check"></i> Tehsil Summary</a>
+                </li>
+                <li data-tab="district-summary"><a href="javascript:void(0)"><i class="fas fa-city"></i> District Summary</a>
                 </li>
                 <li data-tab="multi-summary"><a href="javascript:void(0)"><i class="fas fa-layer-group"></i> Multi-File Summary</a>
                 </li>
@@ -77,6 +79,53 @@
             </header>
 
             <div class="content-body">
+                <!-- Global Dynamic Calculation & Filter Settings (visible for report tabs once data is uploaded) -->
+                <div id="global-filter-card" class="dashboard-card mb-4" style="display: none; border-left: 5px solid var(--primary-color);">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h3 class="card-title text-primary"><i class="fas fa-sliders text-primary me-2"></i> Dynamic Calculation & Filter Settings</h3>
+                        <button class="btn btn-sm btn-outline-secondary" id="btn-reset-filters"><i class="fas fa-undo me-1"></i> Reset Filters</button>
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-3">
+                            <div class="col-md-3">
+                                <label for="filter-calc-col" class="form-label fw-bold small text-muted">Calculation Column (Metric Source)</label>
+                                <select id="filter-calc-col" class="form-select form-select-sm">
+                                    <!-- Dynamic list of numeric columns -->
+                                </select>
+                            </div>
+                            <div class="col-md-3">
+                                <label for="filter-district" class="form-label fw-bold small text-muted">Filter by District</label>
+                                <select id="filter-district" class="form-select form-select-sm">
+                                    <option value="ALL">All Districts</option>
+                                </select>
+                            </div>
+                            <div class="col-md-3">
+                                <label for="filter-tehsil" class="form-label fw-bold small text-muted">Filter by Tehsil</label>
+                                <select id="filter-tehsil" class="form-select form-select-sm">
+                                    <option value="ALL">All Tehsils</option>
+                                </select>
+                            </div>
+                            <div class="col-md-3">
+                                <label for="filter-uc" class="form-label fw-bold small text-muted">Filter by Union Council (UC)</label>
+                                <select id="filter-uc" class="form-select form-select-sm">
+                                    <option value="ALL">All UCs</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="row g-3 mt-2">
+                            <div class="col-md-12">
+                                <label class="form-label fw-bold small text-muted d-block">Filter by Designation (Select one or more)</label>
+                                <div class="d-flex gap-2 mb-2">
+                                    <button type="button" class="btn btn-xs btn-outline-primary py-0 px-2 small" id="btn-desig-select-all" style="font-size: 0.75rem;">Select All</button>
+                                    <button type="button" class="btn btn-xs btn-outline-secondary py-0 px-2 small" id="btn-desig-clear-all" style="font-size: 0.75rem;">Clear All</button>
+                                </div>
+                                <div id="designation-checkbox-container" class="border rounded p-3 bg-light d-flex flex-wrap gap-3" style="max-height: 150px; overflow-y: auto;">
+                                    <span class="text-muted small">Upload an Excel file to see available designations...</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
                 <!-- Tab: Dashboard -->
                 <div id="tab-dashboard" class="tab-content">
                     <section class="welcome-section mb-4">
@@ -166,37 +215,194 @@
                     </div>
                 </div>
 
-                <!-- Tab: Summary List -->
+                <!-- Tab: Tehsil Summary -->
                 <div id="tab-summary" class="tab-content" style="display: none;">
                     <section class="welcome-section mb-4">
-                        <h1 class="welcome-title text-gradient">Calculated Summary</h1>
-                        <p class="text-muted">A consolidated list of all metrics shown on the dashboard.</p>
+                        <h1 class="welcome-title text-gradient">Tehsil Summary Report</h1>
+                        <p class="text-muted">A detailed summary breakdown of health metrics grouped by Tehsil.</p>
                     </section>
 
                     <div class="dashboard-card">
-                        <div class="card-header">
-                            <h3 class="card-title">Metric Breakdown</h3>
+                        <div class="card-header d-flex justify-content-between align-items-center">
+                            <h3 class="card-title">Tehsil Breakdown</h3>
+                            <div class="search-container" style="max-width: 250px;">
+                                <i class="fas fa-filter"></i>
+                                <input type="text" id="tehsil-filter" placeholder="Filter by Tehsil name...">
+                            </div>
                         </div>
                         <div class="card-body p-0">
-                            <div class="table-responsive">
-                                <table class="table table-hover mb-0">
-                                    <thead class="table-light">
+                            <div class="table-responsive" style="max-height: 70vh;">
+                                <table class="table table-hover table-bordered mb-0" id="tehsil-summary-table" style="min-width: 1600px;">
+                                    <thead class="table-dark sticky-top">
                                         <tr>
-                                            <th>Category</th>
+                                            <th rowspan="2" class="align-middle text-center sticky-column" style="left: 0; min-width: 130px; max-width: 130px; width: 130px; z-index: 11;">District</th>
+                                            <th rowspan="2" class="align-middle text-center sticky-column" style="left: 130px; min-width: 130px; max-width: 130px; width: 130px; z-index: 11; border-right: 2px solid #e3e6f0 !important;">Tehsil</th>
+                                            <th colspan="8" class="text-center bg-primary">All Users (Including LHW & CHI)</th>
+                                            <th colspan="8" class="text-center bg-info">Lady Health Workers (LHW)</th>
+                                            <th colspan="8" class="text-center bg-success">Community Health Inspectors (CHI)</th>
+                                        </tr>
+                                        <tr>
+                                            <!-- All Users -->
                                             <th>Total Users</th>
-                                            <th>Active Users</th>
+                                            <th>Active</th>
                                             <th>0 Houses</th>
-                                            <th>non active user %</th>
+                                            <th>Non Active %</th>
                                             <th>Total Houses</th>
-                                            <th>1-5 Houses</th>
-                                            <th>6-10 Houses</th>
-                                            <th>11+ Houses</th>
+                                            <th>1-5</th>
+                                            <th>6-10</th>
+                                            <th>11+</th>
+                                            
+                                            <!-- LHW -->
+                                            <th>Total Users</th>
+                                            <th>Active</th>
+                                            <th>0 Houses</th>
+                                            <th>Non Active %</th>
+                                            <th>Total Houses</th>
+                                            <th>1-5</th>
+                                            <th>6-10</th>
+                                            <th>11+</th>
+                                            
+                                            <!-- CHI -->
+                                            <th>Total Users</th>
+                                            <th>Active</th>
+                                            <th>0 Houses</th>
+                                            <th>Non Active %</th>
+                                            <th>Total Houses</th>
+                                            <th>1-5</th>
+                                            <th>6-10</th>
+                                            <th>11+</th>
                                         </tr>
                                     </thead>
                                     <tbody id="summary-list-body">
-                                        <!-- JS will inject rows here -->
+                                        <tr>
+                                            <td colspan="26" class="text-center py-5 text-muted">
+                                                Please upload an Excel file on the Dashboard to view the summary.
+                                            </td>
+                                        </tr>
                                     </tbody>
                                 </table>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Copy and Export Buttons for Tehsil Summary -->
+                    <div id="tehsil-actions-wrapper" style="display:none;" class="mt-4 mb-5">
+                        <div class="copy-banner-card">
+                            <div class="copy-banner-info">
+                                <div class="copy-banner-icon">
+                                    <i class="fas fa-file-excel"></i>
+                                </div>
+                                <div class="copy-banner-text">
+                                    <h4>Export Tehsil Summary</h4>
+                                    <p>Copy the summary data directly to clipboard for Excel, or download it as an Excel spreadsheet.</p>
+                                </div>
+                            </div>
+                            <div class="d-flex flex-column align-items-center align-items-md-end gap-2">
+                                <div class="d-flex gap-2">
+                                    <button id="tehsil-copy-btn" class="btn-premium-copy">
+                                        <i class="fas fa-copy"></i> Copy for Excel
+                                    </button>
+                                    <button id="tehsil-export-btn" class="btn btn-success rounded-pill px-4">
+                                        <i class="fas fa-download"></i> Export to Excel
+                                    </button>
+                                </div>
+                                <div id="tehsil-copy-feedback" class="copy-feedback-toast"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tab: District Summary -->
+                <div id="tab-district-summary" class="tab-content" style="display: none;">
+                    <section class="welcome-section mb-4">
+                        <h1 class="welcome-title text-gradient">District Summary Report</h1>
+                        <p class="text-muted">A detailed summary breakdown of health metrics grouped by District.</p>
+                    </section>
+
+                    <div class="dashboard-card">
+                        <div class="card-header d-flex justify-content-between align-items-center">
+                            <h3 class="card-title">District Breakdown</h3>
+                            <div class="search-container" style="max-width: 250px;">
+                                <i class="fas fa-filter"></i>
+                                <input type="text" id="district-filter" placeholder="Filter by District name...">
+                            </div>
+                        </div>
+                        <div class="card-body p-0">
+                            <div class="table-responsive" style="max-height: 70vh;">
+                                <table class="table table-hover table-bordered mb-0" id="district-summary-table" style="min-width: 1400px;">
+                                    <thead class="table-dark sticky-top">
+                                        <tr>
+                                            <th rowspan="2" class="align-middle text-center sticky-column" style="left: 0; min-width: 150px; max-width: 150px; width: 150px; z-index: 11; border-right: 2px solid #e3e6f0 !important;">District</th>
+                                            <th colspan="8" class="text-center bg-primary">All Users (Including LHW & CHI)</th>
+                                            <th colspan="8" class="text-center bg-info">Lady Health Workers (LHW)</th>
+                                            <th colspan="8" class="text-center bg-success">Community Health Inspectors (CHI)</th>
+                                        </tr>
+                                        <tr>
+                                            <!-- All Users -->
+                                            <th>Total Users</th>
+                                            <th>Active</th>
+                                            <th>0 Houses</th>
+                                            <th>Non Active %</th>
+                                            <th>Total Houses</th>
+                                            <th>1-5</th>
+                                            <th>6-10</th>
+                                            <th>11+</th>
+                                            
+                                            <!-- LHW -->
+                                            <th>Total Users</th>
+                                            <th>Active</th>
+                                            <th>0 Houses</th>
+                                            <th>Non Active %</th>
+                                            <th>Total Houses</th>
+                                            <th>1-5</th>
+                                            <th>6-10</th>
+                                            <th>11+</th>
+                                            
+                                            <!-- CHI -->
+                                            <th>Total Users</th>
+                                            <th>Active</th>
+                                            <th>0 Houses</th>
+                                            <th>Non Active %</th>
+                                            <th>Total Houses</th>
+                                            <th>1-5</th>
+                                            <th>6-10</th>
+                                            <th>11+</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="district-summary-list-body">
+                                        <tr>
+                                            <td colspan="25" class="text-center py-5 text-muted">
+                                                Please upload an Excel file on the Dashboard to view the summary.
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Copy and Export Buttons for District Summary -->
+                    <div id="district-actions-wrapper" style="display:none;" class="mt-4 mb-5">
+                        <div class="copy-banner-card">
+                            <div class="copy-banner-info">
+                                <div class="copy-banner-icon">
+                                    <i class="fas fa-file-excel"></i>
+                                </div>
+                                <div class="copy-banner-text">
+                                    <h4>Export District Summary</h4>
+                                    <p>Copy the summary data directly to clipboard for Excel, or download it as an Excel spreadsheet.</p>
+                                </div>
+                            </div>
+                            <div class="d-flex flex-column align-items-center align-items-md-end gap-2">
+                                <div class="d-flex gap-2">
+                                    <button id="district-copy-btn" class="btn-premium-copy">
+                                        <i class="fas fa-copy"></i> Copy for Excel
+                                    </button>
+                                    <button id="district-export-btn" class="btn btn-success rounded-pill px-4">
+                                        <i class="fas fa-download"></i> Export to Excel
+                                    </button>
+                                </div>
+                                <div id="district-copy-feedback" class="copy-feedback-toast"></div>
                             </div>
                         </div>
                     </div>
