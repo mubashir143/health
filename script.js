@@ -4,6 +4,27 @@ document.addEventListener('DOMContentLoaded', () => {
     const emptyState = document.getElementById('empty-state');
     const loadingState = document.getElementById('loading-state');
 
+    // Global Filter and Calculations State
+    let currentRawData = null;
+    let activeFilters = {
+        calcCol: '',
+        district: 'ALL',
+        tehsil: 'ALL',
+        uc: 'ALL',
+        selectedDesignations: []
+    };
+
+    // Filter UI Elements
+    const globalFilterCard = document.getElementById('global-filter-card');
+    const filterCalcCol = document.getElementById('filter-calc-col');
+    const filterDistrict = document.getElementById('filter-district');
+    const filterTehsil = document.getElementById('filter-tehsil');
+    const filterUc = document.getElementById('filter-uc');
+    const designationCheckboxContainer = document.getElementById('designation-checkbox-container');
+    const btnDesigSelectAll = document.getElementById('btn-desig-select-all');
+    const btnDesigClearAll = document.getElementById('btn-desig-clear-all');
+    const btnResetFilters = document.getElementById('btn-reset-filters');
+
     fileInput.addEventListener('change', handleFileUpload);
 
     // Tab Switching Logic
@@ -53,14 +74,58 @@ document.addEventListener('DOMContentLoaded', () => {
                     content.style.display = 'none';
                 }
             });
+
+            // Show/hide filter card if data is uploaded
+            const filterableTabs = ['dashboard', 'summary', 'district-summary', 'uc-wise', 'datalist'];
+            if (globalFilterCard && currentRawData) {
+                if (filterableTabs.includes(targetTab)) {
+                    globalFilterCard.style.display = 'block';
+                } else {
+                    globalFilterCard.style.display = 'none';
+                }
+            }
         });
     });
 
+    // Reset settings
     function resetStates() {
         emptyState.style.display = 'block';
         dashboardResults.style.display = 'none';
         loadingState.style.display = 'none';
+        if (globalFilterCard) globalFilterCard.style.display = 'none';
+        currentRawData = null;
     }
+
+    // Dynamic Filter Event Handlers
+    filterCalcCol?.addEventListener('change', applyFiltersAndCalculate);
+    filterDistrict?.addEventListener('change', () => {
+        rebuildTehsilDropdown();
+        rebuildUcDropdown();
+        applyFiltersAndCalculate();
+    });
+    filterTehsil?.addEventListener('change', () => {
+        rebuildUcDropdown();
+        applyFiltersAndCalculate();
+    });
+    filterUc?.addEventListener('change', applyFiltersAndCalculate);
+
+    btnDesigSelectAll?.addEventListener('click', () => {
+        const checkboxes = designationCheckboxContainer?.querySelectorAll('input[type="checkbox"]');
+        checkboxes?.forEach(cb => cb.checked = true);
+        applyFiltersAndCalculate();
+    });
+
+    btnDesigClearAll?.addEventListener('click', () => {
+        const checkboxes = designationCheckboxContainer?.querySelectorAll('input[type="checkbox"]');
+        checkboxes?.forEach(cb => cb.checked = false);
+        applyFiltersAndCalculate();
+    });
+
+    btnResetFilters?.addEventListener('click', () => {
+        if (!currentRawData) return;
+        initializeFilters(currentRawData);
+        applyFiltersAndCalculate();
+    });
 
     function handleFileUpload(e) {
         const file = e.target.files[0];
@@ -97,8 +162,10 @@ document.addEventListener('DOMContentLoaded', () => {
                     return;
                 }
 
-                processHealthData(jsonData);
-                populateRawDataTable(jsonData);
+                currentRawData = jsonData;
+                initializeFilters(jsonData);
+                if (globalFilterCard) globalFilterCard.style.display = 'block';
+                applyFiltersAndCalculate();
             } catch (error) {
                 console.error('Detailed Excel Error:', error);
                 alert('Analysis Error: ' + error.message);
@@ -106,6 +173,273 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         };
         reader.readAsArrayBuffer(file);
+    }
+
+    // Dynamic Filter & Location Setup Helpers
+    function initializeFilters(data) {
+        if (!data || data.length === 0) return;
+        const headers = Object.keys(data[0]);
+
+        // Find District, Tehsil, and UC Columns
+        let districtCol = getLocColumn('districtCol', headers);
+        let tehsilCol = getLocColumn('tehsilCol', headers);
+        let ucCol = getLocColumn('ucCol', headers);
+
+        // Find Designation Column
+        let roleCol = headers.find(h => {
+            const lowerVal = h.toLowerCase();
+            return lowerVal.includes('role') || lowerVal.includes('designation') || lowerVal.includes('category') || lowerVal.includes('position');
+        }) || headers.find(h => {
+            const sampleValues = data.slice(0, 5).map(row => String(row[h]).toLowerCase());
+            return sampleValues.some(v => v.includes('health') || v.includes('worker') || v.includes('officer'));
+        }) || (headers.length > 1 ? headers[headers.length - 2] : headers[0]);
+
+        // 1. Populate Calculation Column (numeric columns from index 6 onwards)
+        filterCalcCol.innerHTML = '';
+        const defaultIndex = 6;
+        headers.forEach((h, idx) => {
+            if (idx >= 6) {
+                const opt = document.createElement('option');
+                opt.value = h;
+                opt.textContent = h;
+                if (idx === defaultIndex) {
+                    opt.selected = true;
+                    activeFilters.calcCol = h;
+                }
+                filterCalcCol.appendChild(opt);
+            }
+        });
+        if (filterCalcCol.options.length === 0) {
+            const lastHeader = headers[headers.length - 1];
+            const opt = document.createElement('option');
+            opt.value = lastHeader;
+            opt.textContent = lastHeader;
+            opt.selected = true;
+            activeFilters.calcCol = lastHeader;
+            filterCalcCol.appendChild(opt);
+        }
+
+        // Reset filter values
+        activeFilters.district = 'ALL';
+        activeFilters.tehsil = 'ALL';
+        activeFilters.uc = 'ALL';
+
+        // 2. Populate Designation Checklist
+        const uniqueDesignations = new Set();
+        data.forEach(row => {
+            const r = String(row[roleCol] || 'Other').trim();
+            if (r) uniqueDesignations.add(r);
+        });
+
+        designationCheckboxContainer.innerHTML = '';
+        activeFilters.selectedDesignations = [...uniqueDesignations].sort();
+        activeFilters.selectedDesignations.forEach((desig, idx) => {
+            const id = `desig-cb-${idx}`;
+            const div = document.createElement('div');
+            div.className = 'form-check form-check-inline';
+            div.innerHTML = `
+                <input class="form-check-input designation-filter-cb" type="checkbox" id="${id}" value="${desig}" checked>
+                <label class="form-check-label small text-dark" for="${id}">${desig}</label>
+            `;
+            div.querySelector('input').addEventListener('change', applyFiltersAndCalculate);
+            designationCheckboxContainer.appendChild(div);
+        });
+
+        // Populate location options
+        updateLocationDropdowns(data, districtCol, tehsilCol, ucCol);
+    }
+
+    function updateLocationDropdowns(data, districtCol, tehsilCol, ucCol) {
+        const districts = new Set();
+        const tehsilsMap = new Map();
+        const ucsMap = new Map();
+
+        data.forEach(row => {
+            const dist = String(row[districtCol] || 'N/A').trim();
+            const teh = String(row[tehsilCol] || 'N/A').trim();
+            const uc = String(row[ucCol] || 'N/A').trim();
+
+            districts.add(dist);
+            
+            if (!tehsilsMap.has(dist)) tehsilsMap.set(dist, new Set());
+            tehsilsMap.get(dist).add(teh);
+
+            if (!ucsMap.has(teh)) ucsMap.set(teh, new Set());
+            ucsMap.get(teh).add(uc);
+        });
+
+        filterDistrict.innerHTML = '<option value="ALL">All Districts</option>';
+        [...districts].sort().forEach(d => {
+            const opt = document.createElement('option');
+            opt.value = d;
+            opt.textContent = d;
+            filterDistrict.appendChild(opt);
+        });
+
+        window.locationData = {
+            districtCol,
+            tehsilCol,
+            ucCol,
+            tehsilsMap,
+            ucsMap,
+            districts: [...districts].sort()
+        };
+
+        rebuildTehsilDropdown();
+        rebuildUcDropdown();
+    }
+
+    function rebuildTehsilDropdown() {
+        const selectedDist = filterDistrict.value;
+        filterTehsil.innerHTML = '<option value="ALL">All Tehsils</option>';
+
+        if (selectedDist === 'ALL') {
+            const allTehsils = new Set();
+            window.locationData.tehsilsMap.forEach(set => set.forEach(t => allTehsils.add(t)));
+            [...allTehsils].sort().forEach(t => {
+                const opt = document.createElement('option');
+                opt.value = t;
+                opt.textContent = t;
+                filterTehsil.appendChild(opt);
+            });
+        } else {
+            const tehsils = window.locationData.tehsilsMap.get(selectedDist) || new Set();
+            [...tehsils].sort().forEach(t => {
+                const opt = document.createElement('option');
+                opt.value = t;
+                opt.textContent = t;
+                filterTehsil.appendChild(opt);
+            });
+        }
+    }
+
+    function rebuildUcDropdown() {
+        const selectedTeh = filterTehsil.value;
+        const selectedDist = filterDistrict.value;
+        filterUc.innerHTML = '<option value="ALL">All UCs</option>';
+
+        if (selectedTeh === 'ALL') {
+            const activeTehsils = new Set();
+            if (selectedDist === 'ALL') {
+                window.locationData.ucsMap.forEach((set, teh) => activeTehsils.add(teh));
+            } else {
+                const tehsils = window.locationData.tehsilsMap.get(selectedDist) || new Set();
+                tehsils.forEach(t => activeTehsils.add(t));
+            }
+
+            const allUcs = new Set();
+            activeTehsils.forEach(teh => {
+                const ucs = window.locationData.ucsMap.get(teh) || new Set();
+                ucs.forEach(u => allUcs.add(u));
+            });
+
+            [...allUcs].sort().forEach(u => {
+                const opt = document.createElement('option');
+                opt.value = u;
+                opt.textContent = u;
+                filterUc.appendChild(opt);
+            });
+        } else {
+            const ucs = window.locationData.ucsMap.get(selectedTeh) || new Set();
+            [...ucs].sort().forEach(u => {
+                const opt = document.createElement('option');
+                opt.value = u;
+                opt.textContent = u;
+                filterUc.appendChild(opt);
+            });
+        }
+    }
+
+    function applyFiltersAndCalculate() {
+        if (!currentRawData || currentRawData.length === 0) return;
+
+        activeFilters.calcCol = filterCalcCol.value;
+        activeFilters.district = filterDistrict.value;
+        activeFilters.tehsil = filterTehsil.value;
+        activeFilters.uc = filterUc.value;
+
+        // Gather checked designations
+        const checkedBoxes = designationCheckboxContainer?.querySelectorAll('input[type="checkbox"]:checked');
+        const selected = [];
+        checkedBoxes?.forEach(cb => selected.push(cb.value));
+        activeFilters.selectedDesignations = selected;
+
+        const headers = Object.keys(currentRawData[0]);
+        const loc = window.locationData || {
+            districtCol: getLocColumn('districtCol', headers),
+            tehsilCol: getLocColumn('tehsilCol', headers),
+            ucCol: getLocColumn('ucCol', headers)
+        };
+        let filteredData = currentRawData;
+
+        // Filter by Location
+        if (activeFilters.district !== 'ALL') {
+            filteredData = filteredData.filter(row => String(row[loc.districtCol] || '').trim() === activeFilters.district);
+        }
+        if (activeFilters.tehsil !== 'ALL') {
+            filteredData = filteredData.filter(row => String(row[loc.tehsilCol] || '').trim() === activeFilters.tehsil);
+        }
+        if (activeFilters.uc !== 'ALL') {
+            filteredData = filteredData.filter(row => String(row[loc.ucCol] || '').trim() === activeFilters.uc);
+        }
+
+        // Filter by Designation
+        let roleCol = headers.find(h => {
+            const lowerVal = h.toLowerCase();
+            return lowerVal.includes('role') || lowerVal.includes('designation') || lowerVal.includes('category') || lowerVal.includes('position');
+        }) || headers.find(h => {
+            const sampleValues = currentRawData.slice(0, 5).map(row => String(row[h]).toLowerCase());
+            return sampleValues.some(v => v.includes('health') || v.includes('worker') || v.includes('officer'));
+        }) || (headers.length > 1 ? headers[headers.length - 2] : headers[0]);
+
+        filteredData = filteredData.filter(row => {
+            const r = String(row[roleCol] || 'Other').trim();
+            return activeFilters.selectedDesignations.includes(r);
+        });
+
+        populateRawDataTable(filteredData);
+        processHealthData(filteredData);
+    }
+
+    function findColumn(headers, keywords, ignoreKeywords, fallbackIndex) {
+        // 1. Check for exact match (case-insensitive)
+        for (const kw of keywords) {
+            const found = headers.find(h => h.toLowerCase().trim() === kw);
+            if (found) return found;
+        }
+
+        // 2. Check for matches containing the keywords but ignoring ID/code columns
+        for (const kw of keywords) {
+            const found = headers.find(h => {
+                const low = h.toLowerCase();
+                return low.includes(kw) && !ignoreKeywords.some(ignore => low.includes(ignore));
+            });
+            if (found) return found;
+        }
+
+        // 3. Fallback to any match containing the keywords
+        for (const kw of keywords) {
+            const found = headers.find(h => h.toLowerCase().includes(kw));
+            if (found) return found;
+        }
+
+        // 4. Default fallback
+        return headers[fallbackIndex] || headers[0];
+    }
+
+    function getLocColumn(colType, headers) {
+        if (window.locationData && window.locationData[colType]) {
+            return window.locationData[colType];
+        }
+        const ignore = ['code', 'id', 'no', 'number', 'num', 'key', 'fk', 'pk'];
+        if (colType === 'districtCol') {
+            return findColumn(headers, ['district', 'dist'], ignore, 0);
+        } else if (colType === 'tehsilCol') {
+            return findColumn(headers, ['tehsil', 'teh'], ignore, 1);
+        } else if (colType === 'ucCol') {
+            return findColumn(headers, ['uc', 'union council', 'union_council', 'area', 'location'], ignore, 2);
+        }
+        return headers[0];
     }
 
     function levenshteinDistance(a, b) {
@@ -183,9 +517,10 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function processHealthData(data) {
+        if (!data || data.length === 0) return;
         const headers = Object.keys(data[0]);
-        // Target Column G (7th column, index 6) for House Counts
-        const houseCol = headers[6] || headers[headers.length - 1];
+        // Use user selected calculation column or target Column G (7th column, index 6) for House Counts
+        const houseCol = activeFilters.calcCol || headers[6] || headers[headers.length - 1];
 
         // Find role column: Look for "role", "designation", "category", or common health officer terms
         let roleCol = headers.find(h => {
@@ -196,7 +531,7 @@ document.addEventListener('DOMContentLoaded', () => {
             return sampleValues.some(v => v.includes('health') || v.includes('worker') || v.includes('officer'));
         }) || (headers.length > 1 ? headers[headers.length - 2] : headers[0]);
 
-        console.log(`Analyzing: Houses in [${houseCol}], Roles in [${roleCol}]`);
+        console.log(`Analyzing: Houses/Premises in [${houseCol}], Roles in [${roleCol}]`);
 
         // Standardize job titles
         standardizeJobTitles(data, roleCol);
@@ -230,13 +565,13 @@ document.addEventListener('DOMContentLoaded', () => {
             return { totalUsers, activeUsers, totalHouses, dist };
         };
 
-        // Filter datasets
+        // Filter datasets based on standard keywords
         const LHW_KEYWORDS = ['lady health worker', 'lhw'];
         const CHO_KEYWORDS = ['community health officer', 'cho', 'chi', 'community health inspector'];
 
         const lhwData = data.filter(row => {
-            const val = String(row[roleCol] || '').toLowerCase();
-            return LHW_KEYWORDS.some(k => val.includes(k));
+            const val = String(row[roleCol] || '').toLowerCase().replace(/\./g, '').trim();
+            return val.includes('lady health worker') || val.includes('lhw');
         });
 
         const choData = data.filter(row => {
@@ -330,8 +665,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
         document.getElementById('cho-distribution').innerHTML = createDistributionHTML(cho.dist);
 
-        // Populate Summary List Tab
-        populateSummaryList(overall, lhw, cho);
+        // Populate Tehsil Summary Tab
+        populateTehsilSummary(data, houseCol, roleCol);
+
+        // Populate District Summary Tab
+        populateDistrictSummary(data, houseCol, roleCol);
 
         // Populate UC Analysis Tab
         populateUCAnalysis(data, houseCol, roleCol);
@@ -343,68 +681,101 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function populateUCAnalysis(data, houseCol, roleCol) {
         const body = document.getElementById('uc-summary-body');
-        const headers = Object.keys(data[0]);
+        if (!currentRawData || currentRawData.length === 0) {
+            if (body) body.innerHTML = '<tr><td colspan="22" class="text-center py-5 text-muted">No records found.</td></tr>';
+            return;
+        }
+        const headers = Object.keys(currentRawData[0]);
 
         // Find UC Column
-        let ucCol = headers.find(h => {
-            const low = h.toLowerCase();
-            return low.includes('uc') || low.includes('union council') || low.includes('area') || low.includes('location');
+        const ucCol = getLocColumn('ucCol', headers);
+        const tehsilCol = getLocColumn('tehsilCol', headers);
+
+        // 1. Get all unique UCs from currentRawData (case-insensitive key normalization)
+        const allUcs = [];
+        const seenUcs = new Set();
+        currentRawData.forEach(row => {
+            const uc = String(row[ucCol] || 'Unknown UC').trim();
+            const normUc = uc.toLowerCase();
+            if (!seenUcs.has(normUc)) {
+                seenUcs.add(normUc);
+                allUcs.push(uc);
+            }
         });
 
-        if (!ucCol) {
-            // Fallback: look for common UC names like "Chak" in data
-            for (let h of headers) {
-                const sampleValues = data.slice(0, 10).map(row => String(row[h]).toLowerCase());
-                if (sampleValues.some(v => v.includes('chak') || v.includes('uc') || /^\d+$/.test(v))) {
-                    ucCol = h;
-                    break;
+        // 2. Filter unique UCs based on active location filters
+        let filteredUcs = allUcs;
+        if (activeFilters.uc !== 'ALL') {
+            filteredUcs = filteredUcs.filter(u => u.toLowerCase() === activeFilters.uc.toLowerCase());
+        } else if (activeFilters.tehsil !== 'ALL') {
+            const ucsInTehsil = new Set();
+            currentRawData.forEach(row => {
+                if (String(row[tehsilCol] || '').trim().toLowerCase() === activeFilters.tehsil.toLowerCase()) {
+                    ucsInTehsil.add(String(row[ucCol] || '').trim().toLowerCase());
                 }
-            }
+            });
+            filteredUcs = filteredUcs.filter(u => ucsInTehsil.has(u.toLowerCase()));
+        } else if (activeFilters.district !== 'ALL') {
+            const districtCol = getLocColumn('districtCol', headers);
+            const ucsInDistrict = new Set();
+            currentRawData.forEach(row => {
+                if (String(row[districtCol] || '').trim().toLowerCase() === activeFilters.district.toLowerCase()) {
+                    ucsInDistrict.add(String(row[ucCol] || '').trim().toLowerCase());
+                }
+            });
+            filteredUcs = filteredUcs.filter(u => ucsInDistrict.has(u.toLowerCase()));
         }
 
-        if (!ucCol) ucCol = headers[0]; // Final fallback
-
-        // Grouping logic
+        // 3. Initialize groups map for filtered UCs
         const groups = {};
-        const LHW_KEYWORDS = ['lady health worker', 'lhw'];
+        const keyMap = {};
+        filteredUcs.forEach(uc => {
+            const normUc = uc.toLowerCase();
+            keyMap[normUc] = uc;
+
+            const emptyGroup = () => ({ users: 0, active: 0, houses: 0, dist: { '0': 0, '1-5': 0, '6-10': 0, '11+': 0 } });
+            groups[uc] = {
+                total: emptyGroup(),
+                lhw: emptyGroup(),
+                cho: emptyGroup()
+            };
+        });
+
+        // 4. Fill the groups using data
         const CHO_KEYWORDS = ['community health officer', 'cho', 'chi', 'community health inspector'];
 
         data.forEach(row => {
-            const uc = String(row[ucCol] || 'Unknown UC');
-            if (!groups[uc]) {
-                const emptyGroup = () => ({ users: 0, active: 0, houses: 0, dist: { '0': 0, '1-5': 0, '6-10': 0, '11+': 0 } });
-                groups[uc] = {
-                    total: emptyGroup(),
-                    lhw: emptyGroup(),
-                    cho: emptyGroup()
+            const uc = String(row[ucCol] || 'Unknown UC').trim();
+            const normUc = uc.toLowerCase();
+            const displayKey = keyMap[normUc];
+
+            if (displayKey && groups[displayKey]) {
+                const role = String(row[roleCol] || '').toLowerCase().replace(/\./g, '').trim();
+                const isLHW = role.includes('lady health worker') || role.includes('lhw');
+                const isCHO = CHO_KEYWORDS.some(k => role.includes(k));
+
+                let houseCount = row[houseCol];
+                if (houseCount === "-" || houseCount === "" || houseCount === undefined || houseCount === null) {
+                    houseCount = 0;
+                } else {
+                    houseCount = parseInt(houseCount) || 0;
+                }
+
+                const updateSubgroup = (g) => {
+                    g.users++;
+                    g.houses += houseCount;
+                    if (houseCount !== 0) g.active++;
+
+                    if (houseCount === 0) g.dist['0']++;
+                    else if (houseCount >= 1 && houseCount <= 5) g.dist['1-5']++;
+                    else if (houseCount >= 6 && houseCount <= 10) g.dist['6-10']++;
+                    else if (houseCount >= 11) g.dist['11+']++;
                 };
+
+                updateSubgroup(groups[displayKey].total);
+                if (isLHW) updateSubgroup(groups[displayKey].lhw);
+                if (isCHO) updateSubgroup(groups[displayKey].cho);
             }
-
-            const role = String(row[roleCol] || '').toLowerCase();
-            const isLHW = LHW_KEYWORDS.some(k => role.includes(k));
-            const isCHO = CHO_KEYWORDS.some(k => role.includes(k));
-
-            let houseCount = row[houseCol];
-            if (houseCount === "-" || houseCount === "" || houseCount === undefined || houseCount === null) {
-                houseCount = 0;
-            } else {
-                houseCount = parseInt(houseCount) || 0;
-            }
-
-            const updateSubgroup = (g) => {
-                g.users++;
-                g.houses += houseCount;
-                if (houseCount !== 0) g.active++;
-
-                if (houseCount === 0) g.dist['0']++;
-                else if (houseCount >= 1 && houseCount <= 5) g.dist['1-5']++;
-                else if (houseCount >= 6 && houseCount <= 10) g.dist['6-10']++;
-                else if (houseCount >= 11) g.dist['11+']++;
-            };
-
-            updateSubgroup(groups[uc].total);
-            if (isLHW) updateSubgroup(groups[uc].lhw);
-            if (isCHO) updateSubgroup(groups[uc].cho);
         });
 
         renderUCTable(groups);
@@ -453,34 +824,524 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
 
-    function populateSummaryList(overall, lhw, cho) {
-        const body = document.getElementById('summary-list-body');
-        const rows = [
-            { name: 'Overall Users', data: overall, class: 'fw-bold' },
-            { name: 'Lady Health Workers (LHW)', data: lhw, class: '' },
-            { name: 'Community Health Inspector (CHI)', data: cho, class: '' }
-        ];
+    let tehsilFinalData = [];
 
-        body.innerHTML = rows.map(row => {
-            const nonActivePct = row.data.totalUsers > 0
-                ? ((row.data.dist['0'] / row.data.totalUsers) * 100).toFixed(2) + '%'
-                : '0.00%';
+    function populateTehsilSummary(data, houseCol, roleCol) {
+        if (!currentRawData || currentRawData.length === 0) {
+            tehsilFinalData = [];
+            renderTehsilTable([]);
+            const actionsWrapper = document.getElementById('tehsil-actions-wrapper');
+            if (actionsWrapper) actionsWrapper.style.display = 'none';
+            return;
+        }
+        const headers = Object.keys(currentRawData[0]);
+
+        // Find District and Tehsil Columns
+        const districtCol = getLocColumn('districtCol', headers);
+        const tehsilCol = getLocColumn('tehsilCol', headers);
+
+        // 1. Get all unique district-tehsil pairs from currentRawData (case-insensitive key normalization)
+        const allTehsils = [];
+        const seenKeys = new Set();
+        currentRawData.forEach(row => {
+            const district = String(row[districtCol] || 'N/A').trim();
+            const tehsil = String(row[tehsilCol] || 'N/A').trim();
+            const normKey = `${district.toLowerCase()}||${tehsil.toLowerCase()}`;
+            if (!seenKeys.has(normKey)) {
+                seenKeys.add(normKey);
+                allTehsils.push({ district, tehsil });
+            }
+        });
+
+        // 2. Filter the unique tehsils list based on location filters (District, Tehsil, UC)
+        let filteredTehsils = allTehsils;
+        if (activeFilters.district !== 'ALL') {
+            filteredTehsils = filteredTehsils.filter(item => item.district.toLowerCase() === activeFilters.district.toLowerCase());
+        }
+        if (activeFilters.tehsil !== 'ALL') {
+            filteredTehsils = filteredTehsils.filter(item => item.tehsil.toLowerCase() === activeFilters.tehsil.toLowerCase());
+        }
+        if (activeFilters.uc !== 'ALL') {
+            const ucCol = getLocColumn('ucCol', headers);
+            const tehsilsWithUc = new Set();
+            currentRawData.forEach(row => {
+                if (String(row[ucCol] || '').trim().toLowerCase() === activeFilters.uc.toLowerCase()) {
+                    tehsilsWithUc.add(String(row[tehsilCol] || '').trim().toLowerCase());
+                }
+            });
+            filteredTehsils = filteredTehsils.filter(item => tehsilsWithUc.has(item.tehsil.toLowerCase()));
+        }
+
+        // 3. Initialize groups map for the filtered tehsils
+        const groups = {};
+        const keyMap = {};
+        filteredTehsils.forEach(item => {
+            const displayKey = `${item.district}||${item.tehsil}`;
+            const normKey = displayKey.toLowerCase();
+            keyMap[normKey] = displayKey;
+
+            const emptyGroup = () => ({
+                users: 0,
+                active: 0,
+                zeroHouse: 0,
+                houses: 0,
+                dist: { '0': 0, '1-5': 0, '6-10': 0, '11+': 0 }
+            });
+            groups[displayKey] = {
+                district: item.district,
+                tehsil: item.tehsil,
+                total: emptyGroup(),
+                lhw: emptyGroup(),
+                cho: emptyGroup()
+            };
+        });
+
+        // 4. Fill the groups using data
+        const CHO_KEYWORDS = ['community health officer', 'cho', 'chi', 'community health inspector'];
+
+        data.forEach(row => {
+            const district = String(row[districtCol] || 'N/A').trim();
+            const tehsil = String(row[tehsilCol] || 'N/A').trim();
+            const normKey = `${district.toLowerCase()}||${tehsil.toLowerCase()}`;
+            const displayKey = keyMap[normKey];
+
+            if (displayKey && groups[displayKey]) {
+                const role = String(row[roleCol] || '').toLowerCase().replace(/\./g, '').trim();
+                const isLHW = role.includes('lady health worker') || role.includes('lhw');
+                const isCHO = CHO_KEYWORDS.some(k => role.includes(k));
+
+                let houseCount = row[houseCol];
+                if (houseCount === "-" || houseCount === "" || houseCount === undefined || houseCount === null) {
+                    houseCount = 0;
+                } else {
+                    houseCount = parseInt(houseCount) || 0;
+                }
+
+                const updateSubgroup = (g) => {
+                    g.users++;
+                    g.houses += houseCount;
+                    if (houseCount !== 0) g.active++;
+                    else g.zeroHouse++;
+
+                    if (houseCount === 0) g.dist['0']++;
+                    else if (houseCount >= 1 && houseCount <= 5) g.dist['1-5']++;
+                    else if (houseCount >= 6 && houseCount <= 10) g.dist['6-10']++;
+                    else if (houseCount >= 11) g.dist['11+']++;
+                };
+
+                updateSubgroup(groups[displayKey].total);
+                if (isLHW) updateSubgroup(groups[displayKey].lhw);
+                if (isCHO) updateSubgroup(groups[displayKey].cho);
+            }
+        });
+
+        tehsilFinalData = Object.values(groups);
+        
+        renderTehsilTable(tehsilFinalData);
+
+        // Show actions wrapper if we have data
+        const actionsWrapper = document.getElementById('tehsil-actions-wrapper');
+        if (actionsWrapper) {
+            actionsWrapper.style.display = tehsilFinalData.length > 0 ? 'block' : 'none';
+        }
+    }
+
+    function renderTehsilTable(tehsilList) {
+        const body = document.getElementById('summary-list-body');
+        if (!tehsilList || tehsilList.length === 0) {
+            body.innerHTML = '<tr><td colspan="26" class="text-center py-5 text-muted">No records found.</td></tr>';
+            return;
+        }
+
+        body.innerHTML = tehsilList.map(g => {
+            const formatPct = (sub) => sub.users > 0 ? ((sub.zeroHouse / sub.users) * 100).toFixed(2) + '%' : '0.00%';
 
             return `
-                <tr class="${row.class}">
-                    <td>${row.name}</td>
-                    <td>${row.data.totalUsers.toLocaleString()}</td>
-                    <td>${row.data.activeUsers.toLocaleString()}</td>
-                    <td>${row.data.dist['0'].toLocaleString()}</td>
-                    <td class="text-danger fw-bold">${nonActivePct}</td>
-                    <td>${row.data.totalHouses.toLocaleString()}</td>
-                    <td>${row.data.dist['1-5'].toLocaleString()}</td>
-                    <td>${row.data.dist['6-10'].toLocaleString()}</td>
-                    <td>${row.data.dist['11+'].toLocaleString()}</td>
+                <tr>
+                    <td class="fw-bold sticky-column" style="left: 0; min-width: 130px; max-width: 130px; width: 130px; z-index: 5;">${g.district}</td>
+                    <td class="fw-bold sticky-column" style="left: 130px; min-width: 130px; max-width: 130px; width: 130px; z-index: 5; border-right: 2px solid #e3e6f0 !important;">${g.tehsil}</td>
+                    
+                    <!-- Overall -->
+                    <td class="table-primary-light">${g.total.users}</td>
+                    <td class="table-primary-light">${g.total.active}</td>
+                    <td class="table-primary-light">${g.total.zeroHouse}</td>
+                    <td class="table-primary-light text-danger fw-bold">${formatPct(g.total)}</td>
+                    <td class="table-primary-light">${g.total.houses.toLocaleString()}</td>
+                    <td class="table-primary-light">${g.total.dist['1-5']}</td>
+                    <td class="table-primary-light">${g.total.dist['6-10']}</td>
+                    <td class="table-primary-light">${g.total.dist['11+']}</td>
+                    
+                    <!-- LHW -->
+                    <td class="table-info-light">${g.lhw.users}</td>
+                    <td class="table-info-light">${g.lhw.active}</td>
+                    <td class="table-info-light">${g.lhw.zeroHouse}</td>
+                    <td class="table-info-light text-danger fw-bold">${formatPct(g.lhw)}</td>
+                    <td class="table-info-light">${g.lhw.houses.toLocaleString()}</td>
+                    <td class="table-info-light">${g.lhw.dist['1-5']}</td>
+                    <td class="table-info-light">${g.lhw.dist['6-10']}</td>
+                    <td class="table-info-light">${g.lhw.dist['11+']}</td>
+                    
+                    <!-- CHI -->
+                    <td class="table-success-light">${g.cho.users}</td>
+                    <td class="table-success-light">${g.cho.active}</td>
+                    <td class="table-success-light">${g.cho.zeroHouse}</td>
+                    <td class="table-success-light text-danger fw-bold">${formatPct(g.cho)}</td>
+                    <td class="table-success-light">${g.cho.houses.toLocaleString()}</td>
+                    <td class="table-success-light">${g.cho.dist['1-5']}</td>
+                    <td class="table-success-light">${g.cho.dist['6-10']}</td>
+                    <td class="table-success-light">${g.cho.dist['11+']}</td>
                 </tr>
             `;
         }).join('');
     }
+
+    // Tehsil Filter Listener
+    document.getElementById('tehsil-filter')?.addEventListener('input', (e) => {
+        const query = e.target.value.toLowerCase();
+        const filtered = tehsilFinalData.filter(g => g.tehsil.toLowerCase().includes(query) || g.district.toLowerCase().includes(query));
+        renderTehsilTable(filtered);
+    });
+
+    // Copy for Excel - Tehsil Summary
+    document.getElementById('tehsil-copy-btn')?.addEventListener('click', () => {
+        if (tehsilFinalData.length === 0) return;
+
+        const headers = [
+            'District', 'Tehsil',
+            'Total Users (All)', 'Active (All)', '0 Houses (All)', 'Non Active % (All)', 'Total Houses (All)', '1-5 (All)', '6-10 (All)', '11+ (All)',
+            'Total Users (LHW)', 'Active (LHW)', '0 Houses (LHW)', 'Non Active % (LHW)', 'Total Houses (LHW)', '1-5 (LHW)', '6-10 (LHW)', '11+ (LHW)',
+            'Total Users (CHI)', 'Active (CHI)', '0 Houses (CHI)', 'Non Active % (CHI)', 'Total Houses (CHI)', '1-5 (CHI)', '6-10 (CHI)', '11+ (CHI)'
+        ];
+
+        const lines = [headers.join('\t')];
+
+        tehsilFinalData.forEach(g => {
+            const formatPct = (sub) => sub.users > 0 ? ((sub.zeroHouse / sub.users) * 100).toFixed(2) + '%' : '0.00%';
+            
+            const line = [
+                g.district, g.tehsil,
+                g.total.users, g.total.active, g.total.zeroHouse, formatPct(g.total), g.total.houses, g.total.dist['1-5'], g.total.dist['6-10'], g.total.dist['11+'],
+                g.lhw.users, g.lhw.active, g.lhw.zeroHouse, formatPct(g.lhw), g.lhw.houses, g.lhw.dist['1-5'], g.lhw.dist['6-10'], g.lhw.dist['11+'],
+                g.cho.users, g.cho.active, g.cho.zeroHouse, formatPct(g.cho), g.cho.houses, g.cho.dist['1-5'], g.cho.dist['6-10'], g.cho.dist['11+']
+            ];
+            lines.push(line.join('\t'));
+        });
+
+        const tsvText = lines.join('\n');
+        const feedback = document.getElementById('tehsil-copy-feedback');
+
+        const showSuccess = () => {
+            if (feedback) {
+                feedback.innerHTML = `<i class="fas fa-check-circle me-1"></i> Copied! Ready to paste into Excel.`;
+                feedback.classList.add('show');
+                setTimeout(() => feedback.classList.remove('show'), 4000);
+            }
+        };
+
+        navigator.clipboard.writeText(tsvText).then(showSuccess).catch(() => {
+            const ta = document.createElement('textarea');
+            ta.value = tsvText;
+            ta.style.position = 'fixed';
+            ta.style.opacity = '0';
+            document.body.appendChild(ta);
+            ta.select();
+            document.execCommand('copy');
+            document.body.removeChild(ta);
+            showSuccess();
+        });
+    });
+
+    // Export to Excel - Tehsil Summary
+    document.getElementById('tehsil-export-btn')?.addEventListener('click', () => {
+        if (tehsilFinalData.length === 0) return;
+
+        const sheetData = tehsilFinalData.map(g => {
+            const formatPct = (sub) => sub.users > 0 ? ((sub.zeroHouse / sub.users) * 100).toFixed(2) + '%' : '0.00%';
+            return {
+                "District": g.district,
+                "Tehsil": g.tehsil,
+                "Total Users (All)": g.total.users,
+                "Active (All)": g.total.active,
+                "0 Houses (All)": g.total.zeroHouse,
+                "Non Active % (All)": formatPct(g.total),
+                "Total Houses (All)": g.total.houses,
+                "1-5 (All)": g.total.dist['1-5'],
+                "6-10 (All)": g.total.dist['6-10'],
+                "11+ (All)": g.total.dist['11+'],
+                "Total Users (LHW)": g.lhw.users,
+                "Active (LHW)": g.lhw.active,
+                "0 Houses (LHW)": g.lhw.zeroHouse,
+                "Non Active % (LHW)": formatPct(g.lhw),
+                "Total Houses (LHW)": g.lhw.houses,
+                "1-5 (LHW)": g.lhw.dist['1-5'],
+                "6-10 (LHW)": g.lhw.dist['6-10'],
+                "11+ (LHW)": g.lhw.dist['11+'],
+                "Total Users (CHI)": g.cho.users,
+                "Active (CHI)": g.cho.active,
+                "0 Houses (CHI)": g.cho.zeroHouse,
+                "Non Active % (CHI)": formatPct(g.cho),
+                "Total Houses (CHI)": g.cho.houses,
+                "1-5 (CHI)": g.cho.dist['1-5'],
+                "6-10 (CHI)": g.cho.dist['6-10'],
+                "11+ (CHI)": g.cho.dist['11+']
+            };
+        });
+
+        const ws = XLSX.utils.json_to_sheet(sheetData);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "Tehsil Summary");
+        XLSX.writeFile(wb, "Tehsil_Summary_Report.xlsx");
+    });
+
+    // --- DISTRICT SUMMARY LOGIC ---
+    let districtFinalData = [];
+
+    function populateDistrictSummary(data, houseCol, roleCol) {
+        if (!currentRawData || currentRawData.length === 0) {
+            districtFinalData = [];
+            renderDistrictTable([]);
+            const actionsWrapper = document.getElementById('district-actions-wrapper');
+            if (actionsWrapper) actionsWrapper.style.display = 'none';
+            return;
+        }
+        const headers = Object.keys(currentRawData[0]);
+
+        // Find District Column
+        const districtCol = getLocColumn('districtCol', headers);
+
+        // 1. Get all unique districts from currentRawData (case-insensitive key normalization)
+        const districts = [];
+        const seenDistricts = new Set();
+        currentRawData.forEach(row => {
+            const district = String(row[districtCol] || 'N/A').trim();
+            const normDist = district.toLowerCase();
+            if (!seenDistricts.has(normDist)) {
+                seenDistricts.add(normDist);
+                districts.push(district);
+            }
+        });
+
+        // 2. Filter unique districts based on active district filter
+        let filteredDistricts = districts;
+        if (activeFilters.district !== 'ALL') {
+            filteredDistricts = filteredDistricts.filter(d => d.toLowerCase() === activeFilters.district.toLowerCase());
+        }
+
+        // 3. Initialize groups map for filtered districts
+        const groups = {};
+        const keyMap = {};
+        filteredDistricts.forEach(dist => {
+            const normDist = dist.toLowerCase();
+            keyMap[normDist] = dist;
+
+            const emptyGroup = () => ({
+                users: 0,
+                active: 0,
+                zeroHouse: 0,
+                houses: 0,
+                dist: { '0': 0, '1-5': 0, '6-10': 0, '11+': 0 }
+            });
+            groups[dist] = {
+                district: dist,
+                total: emptyGroup(),
+                lhw: emptyGroup(),
+                cho: emptyGroup()
+            };
+        });
+
+        // 4. Fill the groups using data
+        const CHO_KEYWORDS = ['community health officer', 'cho', 'chi', 'community health inspector'];
+
+        data.forEach(row => {
+            const district = String(row[districtCol] || 'N/A').trim();
+            const normDist = district.toLowerCase();
+            const displayKey = keyMap[normDist];
+
+            if (displayKey && groups[displayKey]) {
+                const role = String(row[roleCol] || '').toLowerCase().replace(/\./g, '').trim();
+                const isLHW = role.includes('lady health worker') || role.includes('lhw');
+                const isCHO = CHO_KEYWORDS.some(k => role.includes(k));
+
+                let houseCount = row[houseCol];
+                if (houseCount === "-" || houseCount === "" || houseCount === undefined || houseCount === null) {
+                    houseCount = 0;
+                } else {
+                    houseCount = parseInt(houseCount) || 0;
+                }
+
+                const updateSubgroup = (g) => {
+                    g.users++;
+                    g.houses += houseCount;
+                    if (houseCount !== 0) g.active++;
+                    else g.zeroHouse++;
+
+                    if (houseCount === 0) g.dist['0']++;
+                    else if (houseCount >= 1 && houseCount <= 5) g.dist['1-5']++;
+                    else if (houseCount >= 6 && houseCount <= 10) g.dist['6-10']++;
+                    else if (houseCount >= 11) g.dist['11+']++;
+                };
+
+                updateSubgroup(groups[displayKey].total);
+                if (isLHW) updateSubgroup(groups[displayKey].lhw);
+                if (isCHO) updateSubgroup(groups[displayKey].cho);
+            }
+        });
+
+        districtFinalData = Object.values(groups);
+        
+        renderDistrictTable(districtFinalData);
+
+        // Show actions wrapper if we have data
+        const actionsWrapper = document.getElementById('district-actions-wrapper');
+        if (actionsWrapper) {
+            actionsWrapper.style.display = districtFinalData.length > 0 ? 'block' : 'none';
+        }
+    }
+
+    function renderDistrictTable(districtList) {
+        const body = document.getElementById('district-summary-list-body');
+        if (!districtList || districtList.length === 0) {
+            body.innerHTML = '<tr><td colspan="25" class="text-center py-5 text-muted">No records found.</td></tr>';
+            return;
+        }
+
+        body.innerHTML = districtList.map(g => {
+            const formatPct = (sub) => sub.users > 0 ? ((sub.zeroHouse / sub.users) * 100).toFixed(2) + '%' : '0.00%';
+
+            return `
+                <tr>
+                    <td class="fw-bold sticky-column" style="left: 0; min-width: 150px; max-width: 150px; width: 150px; z-index: 5; border-right: 2px solid #e3e6f0 !important;">${g.district}</td>
+                    
+                    <!-- Overall -->
+                    <td class="table-primary-light">${g.total.users}</td>
+                    <td class="table-primary-light">${g.total.active}</td>
+                    <td class="table-primary-light">${g.total.zeroHouse}</td>
+                    <td class="table-primary-light text-danger fw-bold">${formatPct(g.total)}</td>
+                    <td class="table-primary-light">${g.total.houses.toLocaleString()}</td>
+                    <td class="table-primary-light">${g.total.dist['1-5']}</td>
+                    <td class="table-primary-light">${g.total.dist['6-10']}</td>
+                    <td class="table-primary-light">${g.total.dist['11+']}</td>
+                    
+                    <!-- LHW -->
+                    <td class="table-info-light">${g.lhw.users}</td>
+                    <td class="table-info-light">${g.lhw.active}</td>
+                    <td class="table-info-light">${g.lhw.zeroHouse}</td>
+                    <td class="table-info-light text-danger fw-bold">${formatPct(g.lhw)}</td>
+                    <td class="table-info-light">${g.lhw.houses.toLocaleString()}</td>
+                    <td class="table-info-light">${g.lhw.dist['1-5']}</td>
+                    <td class="table-info-light">${g.lhw.dist['6-10']}</td>
+                    <td class="table-info-light">${g.lhw.dist['11+']}</td>
+                    
+                    <!-- CHI -->
+                    <td class="table-success-light">${g.cho.users}</td>
+                    <td class="table-success-light">${g.cho.active}</td>
+                    <td class="table-success-light">${g.cho.zeroHouse}</td>
+                    <td class="table-success-light text-danger fw-bold">${formatPct(g.cho)}</td>
+                    <td class="table-success-light">${g.cho.houses.toLocaleString()}</td>
+                    <td class="table-success-light">${g.cho.dist['1-5']}</td>
+                    <td class="table-success-light">${g.cho.dist['6-10']}</td>
+                    <td class="table-success-light">${g.cho.dist['11+']}</td>
+                </tr>
+            `;
+        }).join('');
+    }
+
+    // District Filter Listener
+    document.getElementById('district-filter')?.addEventListener('input', (e) => {
+        const query = e.target.value.toLowerCase();
+        const filtered = districtFinalData.filter(g => g.district.toLowerCase().includes(query));
+        renderDistrictTable(filtered);
+    });
+
+    // Copy for Excel - District Summary
+    document.getElementById('district-copy-btn')?.addEventListener('click', () => {
+        if (districtFinalData.length === 0) return;
+
+        const headers = [
+            'District',
+            'Total Users (All)', 'Active (All)', '0 Houses (All)', 'Non Active % (All)', 'Total Houses (All)', '1-5 (All)', '6-10 (All)', '11+ (All)',
+            'Total Users (LHW)', 'Active (LHW)', '0 Houses (LHW)', 'Non Active % (LHW)', 'Total Houses (LHW)', '1-5 (LHW)', '6-10 (LHW)', '11+ (LHW)',
+            'Total Users (CHI)', 'Active (CHI)', '0 Houses (CHI)', 'Non Active % (CHI)', 'Total Houses (CHI)', '1-5 (CHI)', '6-10 (CHI)', '11+ (CHI)'
+        ];
+
+        const lines = [headers.join('\t')];
+
+        districtFinalData.forEach(g => {
+            const formatPct = (sub) => sub.users > 0 ? ((sub.zeroHouse / sub.users) * 100).toFixed(2) + '%' : '0.00%';
+            
+            const line = [
+                g.district,
+                g.total.users, g.total.active, g.total.zeroHouse, formatPct(g.total), g.total.houses, g.total.dist['1-5'], g.total.dist['6-10'], g.total.dist['11+'],
+                g.lhw.users, g.lhw.active, g.lhw.zeroHouse, formatPct(g.lhw), g.lhw.houses, g.lhw.dist['1-5'], g.lhw.dist['6-10'], g.lhw.dist['11+'],
+                g.cho.users, g.cho.active, g.cho.zeroHouse, formatPct(g.cho), g.cho.houses, g.cho.dist['1-5'], g.cho.dist['6-10'], g.cho.dist['11+']
+            ];
+            lines.push(line.join('\t'));
+        });
+
+        const tsvText = lines.join('\n');
+        const feedback = document.getElementById('district-copy-feedback');
+
+        const showSuccess = () => {
+            if (feedback) {
+                feedback.innerHTML = `<i class="fas fa-check-circle me-1"></i> Copied! Ready to paste into Excel.`;
+                feedback.classList.add('show');
+                setTimeout(() => feedback.classList.remove('show'), 4000);
+            }
+        };
+
+        navigator.clipboard.writeText(tsvText).then(showSuccess).catch(() => {
+            const ta = document.createElement('textarea');
+            ta.value = tsvText;
+            ta.style.position = 'fixed';
+            ta.style.opacity = '0';
+            document.body.appendChild(ta);
+            ta.select();
+            document.execCommand('copy');
+            document.body.removeChild(ta);
+            showSuccess();
+        });
+    });
+
+    // Export to Excel - District Summary
+    document.getElementById('district-export-btn')?.addEventListener('click', () => {
+        if (districtFinalData.length === 0) return;
+
+        const sheetData = districtFinalData.map(g => {
+            const formatPct = (sub) => sub.users > 0 ? ((sub.zeroHouse / sub.users) * 100).toFixed(2) + '%' : '0.00%';
+            return {
+                "District": g.district,
+                "Total Users (All)": g.total.users,
+                "Active (All)": g.total.active,
+                "0 Houses (All)": g.total.zeroHouse,
+                "Non Active % (All)": formatPct(g.total),
+                "Total Houses (All)": g.total.houses,
+                "1-5 (All)": g.total.dist['1-5'],
+                "6-10 (All)": g.total.dist['6-10'],
+                "11+ (All)": g.total.dist['11+'],
+                "Total Users (LHW)": g.lhw.users,
+                "Active (LHW)": g.lhw.active,
+                "0 Houses (LHW)": g.lhw.zeroHouse,
+                "Non Active % (LHW)": formatPct(g.lhw),
+                "Total Houses (LHW)": g.lhw.houses,
+                "1-5 (LHW)": g.lhw.dist['1-5'],
+                "6-10 (LHW)": g.lhw.dist['6-10'],
+                "11+ (LHW)": g.lhw.dist['11+'],
+                "Total Users (CHI)": g.cho.users,
+                "Active (CHI)": g.cho.active,
+                "0 Houses (CHI)": g.cho.zeroHouse,
+                "Non Active % (CHI)": formatPct(g.cho),
+                "Total Houses (CHI)": g.cho.houses,
+                "1-5 (CHI)": g.cho.dist['1-5'],
+                "6-10 (CHI)": g.cho.dist['6-10'],
+                "11+ (CHI)": g.cho.dist['11+']
+            };
+        });
+
+        const ws = XLSX.utils.json_to_sheet(sheetData);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "District Summary");
+        XLSX.writeFile(wb, "District_Summary_Report.xlsx");
+    });
 
     // --- GET CHI NUMBERS LOGIC ---
     let chiFinalData = [];
@@ -1051,8 +1912,8 @@ document.addEventListener('DOMContentLoaded', () => {
         const CHO_KEYWORDS = ['community health officer', 'cho', 'chi', 'community health inspector'];
 
         const lhwData = data.filter(row => {
-            const val = String(row[roleCol] || '').toLowerCase();
-            return LHW_KEYWORDS.some(k => val.includes(k));
+            const val = String(row[roleCol] || '').trim().toLowerCase();
+            return LHW_KEYWORDS.includes(val);
         });
 
         const choData = data.filter(row => {
