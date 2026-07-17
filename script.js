@@ -27,6 +27,22 @@ document.addEventListener('DOMContentLoaded', () => {
 
     fileInput.addEventListener('change', handleFileUpload);
 
+    // Normalized helper functions for strict role/designation matching
+    function isRowLHW(roleVal) {
+        const val = String(roleVal || '').toLowerCase().replace(/\./g, '').trim();
+        return val === 'lady health worker' || val === 'lhw';
+    }
+
+    function isRowCHO(roleVal) {
+        const val = String(roleVal || '').toLowerCase().replace(/\./g, '').trim();
+        return val === 'community health officer' || val === 'cho' || val === 'chi' || val === 'community health inspector';
+    }
+
+    function isRowFWW(roleVal) {
+        const val = String(roleVal || '').toLowerCase().replace(/\./g, '').trim();
+        return val === 'family welfare worker' || val === 'fww';
+    }
+
     // Tab Switching Logic
     const tabLinks = document.querySelectorAll('.nav-links li[data-tab]');
     const tabContents = document.querySelectorAll('.content-body > .tab-content');
@@ -565,23 +581,14 @@ document.addEventListener('DOMContentLoaded', () => {
             return { totalUsers, activeUsers, totalHouses, dist };
         };
 
-        // Filter datasets based on standard keywords
-        const LHW_KEYWORDS = ['lady health worker', 'lhw'];
-        const CHO_KEYWORDS = ['community health officer', 'cho', 'chi', 'community health inspector'];
-
-        const lhwData = data.filter(row => {
-            const val = String(row[roleCol] || '').toLowerCase().replace(/\./g, '').trim();
-            return val.includes('lady health worker') || val.includes('lhw');
-        });
-
-        const choData = data.filter(row => {
-            const val = String(row[roleCol] || '').toLowerCase();
-            return CHO_KEYWORDS.some(k => val.includes(k));
-        });
+        const lhwData = data.filter(row => isRowLHW(row[roleCol]));
+        const choData = data.filter(row => isRowCHO(row[roleCol]));
+        const fwwData = data.filter(row => isRowFWW(row[roleCol]));
 
         const overallResults = analyze(data);
         const lhwResults = analyze(lhwData);
         const choResults = analyze(choData);
+        const fwwResults = analyze(fwwData);
 
         // Calculate Role Counts for Breakdown
         const roleCounts = {};
@@ -590,7 +597,7 @@ document.addEventListener('DOMContentLoaded', () => {
             roleCounts[r] = (roleCounts[r] || 0) + 1;
         });
 
-        updateDashboard(overallResults, lhwResults, choResults, roleCounts, data, houseCol, roleCol);
+        updateDashboard(overallResults, lhwResults, choResults, fwwResults, roleCounts, data, houseCol, roleCol);
     }
 
     function createMetricCard(label, value, icon, className = '') {
@@ -628,7 +635,7 @@ document.addEventListener('DOMContentLoaded', () => {
         `;
     }
 
-    function updateDashboard(overall, lhw, cho, roleCounts, data, houseCol, roleCol) {
+    function updateDashboard(overall, lhw, cho, fww, roleCounts, data, houseCol, roleCol) {
         // Overall Metrics
         const overallMetricsEl = document.getElementById('overall-metrics');
         overallMetricsEl.innerHTML =
@@ -664,6 +671,23 @@ document.addEventListener('DOMContentLoaded', () => {
             createMetricCard('CHO Houses Covered', cho.totalHouses, 'fa-hospital', 'cho');
 
         document.getElementById('cho-distribution').innerHTML = createDistributionHTML(cho.dist);
+
+        // FWW Metrics
+        const fwwSectionContainer = document.getElementById('fww-section-container');
+        if (fwwSectionContainer) {
+            if (fww && fww.totalUsers > 0) {
+                fwwSectionContainer.style.display = 'block';
+                const fwwMetricsEl = document.getElementById('fww-metrics');
+                fwwMetricsEl.innerHTML =
+                    createMetricCard('FWW Total Users', fww.totalUsers, 'fa-briefcase-medical', 'fww') +
+                    createMetricCard('FWW Active Users', fww.activeUsers, 'fa-file-prescription', 'fww') +
+                    createMetricCard('FWW Houses Covered', fww.totalHouses, 'fa-house-chimney-medical', 'fww');
+
+                document.getElementById('fww-distribution').innerHTML = createDistributionHTML(fww.dist);
+            } else {
+                fwwSectionContainer.style.display = 'none';
+            }
+        }
 
         // Populate Tehsil Summary Tab
         populateTehsilSummary(data, houseCol, roleCol);
@@ -742,17 +766,14 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         // 4. Fill the groups using data
-        const CHO_KEYWORDS = ['community health officer', 'cho', 'chi', 'community health inspector'];
-
         data.forEach(row => {
             const uc = String(row[ucCol] || 'Unknown UC').trim();
             const normUc = uc.toLowerCase();
             const displayKey = keyMap[normUc];
 
             if (displayKey && groups[displayKey]) {
-                const role = String(row[roleCol] || '').toLowerCase().replace(/\./g, '').trim();
-                const isLHW = role.includes('lady health worker') || role.includes('lhw');
-                const isCHO = CHO_KEYWORDS.some(k => role.includes(k));
+                const isLHW = isRowLHW(row[roleCol]);
+                const isCHO = isRowCHO(row[roleCol]);
 
                 let houseCount = row[houseCol];
                 if (houseCount === "-" || houseCount === "" || houseCount === undefined || houseCount === null) {
@@ -897,8 +918,6 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         // 4. Fill the groups using data
-        const CHO_KEYWORDS = ['community health officer', 'cho', 'chi', 'community health inspector'];
-
         data.forEach(row => {
             const district = String(row[districtCol] || 'N/A').trim();
             const tehsil = String(row[tehsilCol] || 'N/A').trim();
@@ -906,9 +925,8 @@ document.addEventListener('DOMContentLoaded', () => {
             const displayKey = keyMap[normKey];
 
             if (displayKey && groups[displayKey]) {
-                const role = String(row[roleCol] || '').toLowerCase().replace(/\./g, '').trim();
-                const isLHW = role.includes('lady health worker') || role.includes('lhw');
-                const isCHO = CHO_KEYWORDS.some(k => role.includes(k));
+                const isLHW = isRowLHW(row[roleCol]);
+                const isCHO = isRowCHO(row[roleCol]);
 
                 let houseCount = row[houseCol];
                 if (houseCount === "-" || houseCount === "" || houseCount === undefined || houseCount === null) {
@@ -1150,17 +1168,14 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         // 4. Fill the groups using data
-        const CHO_KEYWORDS = ['community health officer', 'cho', 'chi', 'community health inspector'];
-
         data.forEach(row => {
             const district = String(row[districtCol] || 'N/A').trim();
             const normDist = district.toLowerCase();
             const displayKey = keyMap[normDist];
 
             if (displayKey && groups[displayKey]) {
-                const role = String(row[roleCol] || '').toLowerCase().replace(/\./g, '').trim();
-                const isLHW = role.includes('lady health worker') || role.includes('lhw');
-                const isCHO = CHO_KEYWORDS.some(k => role.includes(k));
+                const isLHW = isRowLHW(row[roleCol]);
+                const isCHO = isRowCHO(row[roleCol]);
 
                 let houseCount = row[houseCol];
                 if (houseCount === "-" || houseCount === "" || houseCount === undefined || houseCount === null) {
@@ -1841,6 +1856,9 @@ document.addEventListener('DOMContentLoaded', () => {
             tsvLines.push(buildRow('Overall Users', results.overall));
             tsvLines.push(buildRow('Lady Health Workers (LHW)', results.lhw));
             tsvLines.push(buildRow('Community Health Inspector (CHI)', results.cho));
+            if (results.fww && results.fww.totalUsers > 0) {
+                tsvLines.push(buildRow('Family Welfare Worker (FWW)', results.fww));
+            }
         });
 
         const tsvText = tsvLines.join('\n');
@@ -1908,23 +1926,15 @@ document.addEventListener('DOMContentLoaded', () => {
             return { totalUsers, activeUsers, totalHouses, dist };
         };
 
-        const LHW_KEYWORDS = ['lady health worker', 'lhw'];
-        const CHO_KEYWORDS = ['community health officer', 'cho', 'chi', 'community health inspector'];
-
-        const lhwData = data.filter(row => {
-            const val = String(row[roleCol] || '').trim().toLowerCase();
-            return LHW_KEYWORDS.includes(val);
-        });
-
-        const choData = data.filter(row => {
-            const val = String(row[roleCol] || '').toLowerCase();
-            return CHO_KEYWORDS.some(k => val.includes(k));
-        });
+        const lhwData = data.filter(row => isRowLHW(row[roleCol]));
+        const choData = data.filter(row => isRowCHO(row[roleCol]));
+        const fwwData = data.filter(row => isRowFWW(row[roleCol]));
 
         return {
             overall: analyze(data),
             lhw: analyze(lhwData),
-            cho: analyze(choData)
+            cho: analyze(choData),
+            fww: analyze(fwwData)
         };
     }
 
@@ -1934,6 +1944,10 @@ document.addEventListener('DOMContentLoaded', () => {
             { name: 'Lady Health Workers (LHW)', data: results.lhw, class: '' },
             { name: 'Community Health Inspector (CHI)', data: results.cho, class: '' }
         ];
+
+        if (results.fww && results.fww.totalUsers > 0) {
+            rows.push({ name: 'Family Welfare Worker (FWW)', data: results.fww, class: '' });
+        }
 
         const tbodyHTML = rows.map(row => {
             const nonActivePct = row.data.totalUsers > 0

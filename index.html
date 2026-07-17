@@ -200,6 +200,19 @@
                                 <div class="distribution-grid" id="cho-distribution"></div>
                             </div>
                         </div>
+
+                        <!-- FWW Section -->
+                        <div id="fww-section-container" style="display: none;">
+                            <div class="section-title mb-4 mt-5">
+                                <h2 class="h4"><i class="fas fa-briefcase-medical me-2 text-warning"></i> Family Welfare Workers (FWW)</h2>
+                            </div>
+                            <div class="row g-4" id="fww-metrics"></div>
+                            <div class="dashboard-card mt-4">
+                                <div class="card-body">
+                                    <div class="distribution-grid" id="fww-distribution"></div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
 
                     <!-- States -->
@@ -511,7 +524,11 @@
                                         </tr>
                                     </thead>
                                     <tbody id="uc-summary-body">
-                                        <!-- JS will inject UC rows here -->
+                                        <tr>
+                                            <td colspan="22" class="text-center py-5 text-muted">
+                                                Please upload an Excel file on the Dashboard to view the summary.
+                                            </td>
+                                        </tr>
                                     </tbody>
                                 </table>
                             </div>
@@ -765,7 +782,13 @@
                                             <th>Waiting for data...</th>
                                         </tr>
                                     </thead>
-                                    <tbody id="raw-data-body"></tbody>
+                                    <tbody id="raw-data-body">
+                                        <tr>
+                                            <td colspan="2" class="text-center py-5 text-muted">
+                                                Please upload an Excel file on the Dashboard to view the raw data.
+                                            </td>
+                                        </tr>
+                                    </tbody>
                                 </table>
                             </div>
                         </div>

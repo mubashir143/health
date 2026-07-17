@@ -38,6 +38,11 @@ body {
     flex-shrink: 0;
     transition: all 0.3s ease;
     z-index: 1000;
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    position: sticky;
+    top: 0;
 }
 
 .sidebar-header {
@@ -67,6 +72,8 @@ body {
 .nav-links {
     list-style: none;
     margin-top: 20px;
+    flex-grow: 1;
+    overflow-y: auto;
 }
 
 .nav-links li {
@@ -123,6 +130,9 @@ body {
     flex-grow: 1;
     display: flex;
     flex-direction: column;
+    min-width: 0;
+    width: 100%;
+    overflow-x: hidden;
 }
 
 .top-bar {
@@ -276,6 +286,10 @@ body {
     border-left-color: var(--success-color);
 }
 
+.metric-card.fww {
+    border-left-color: var(--warning-color);
+}
+
 .metric-label {
     text-transform: uppercase;
     font-size: 0.75rem;
@@ -373,6 +387,9 @@ body {
 
 .table-responsive {
     border-radius: 0 0 var(--border-radius) var(--border-radius);
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    width: 100%;
 }
 
 #raw-data-table thead th {
@@ -463,7 +480,7 @@ body {
         position: fixed;
         left: -100%;
         height: 100vh;
-        z-index: 1001;
+        z-index: 1050;
     }
 
     .sidebar.show {
@@ -472,6 +489,7 @@ body {
 
     .sidebar-overlay.show {
         display: block;
+        z-index: 1040;
     }
 
     .welcome-title {
@@ -496,7 +514,7 @@ body {
 }
 
 @media (max-width: 576px) {
-    .search-container {
+    .top-bar .search-container {
         display: none;
     }
 
@@ -713,4 +731,29 @@ thead th.sticky-column {
     border-color: var(--primary-color);
     box-shadow: 0 0 0 0.2rem rgba(78, 115, 223, 0.15);
     background-color: #fff;
+}
+
+/* Card header and action buttons responsiveness */
+@media (max-width: 768px) {
+    .card-header.d-flex {
+        flex-direction: column !important;
+        align-items: stretch !important;
+        gap: 10px;
+    }
+    .card-header.d-flex .search-container {
+        max-width: 100% !important;
+        width: 100% !important;
+    }
+}
+
+@media (max-width: 576px) {
+    .copy-banner-card .d-flex {
+        flex-direction: column;
+        width: 100%;
+    }
+    .copy-banner-card .d-flex .btn,
+    .copy-banner-card .d-flex button {
+        width: 100% !important;
+        justify-content: center;
+    }
 }
