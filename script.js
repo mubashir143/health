@@ -43,6 +43,123 @@ document.addEventListener('DOMContentLoaded', () => {
         return val === 'family welfare worker' || val === 'fww';
     }
 
+    // Parse date from filename (e.g. "Total_House_Registration_july 17", "july 5", etc.) for date-wise ascending sorting
+    function parseDateFromFileName(fileName) {
+        if (!fileName) return null;
+
+        let nameWithoutExt = fileName.replace(/\.[^/.]+$/, "");
+        let cleanName = nameWithoutExt.replace(/[_]/g, " ").toLowerCase();
+
+        const monthMap = {
+            'january': 0, 'jan': 0,
+            'february': 1, 'feb': 1,
+            'march': 2, 'mar': 2,
+            'april': 3, 'apr': 3,
+            'may': 4,
+            'june': 5, 'jun': 5,
+            'july': 6, 'jul': 6,
+            'august': 7, 'aug': 7,
+            'september': 8, 'sep': 8, 'sept': 8,
+            'october': 9, 'oct': 9,
+            'november': 10, 'nov': 10,
+            'december': 11, 'dec': 11
+        };
+
+        const monthNames = Object.keys(monthMap).join('|');
+
+        // Match Month + Day (e.g. "july 17", "july 17th", "jul 5")
+        const monthFirstRegex = new RegExp(`\\b(${monthNames})\\s*(\\d{1,2})(?:st|nd|rd|th)?\\b`, 'i');
+        // Match Day + Month (e.g. "17 july", "5 jul")
+        const dayFirstRegex = new RegExp(`\\b(\\d{1,2})(?:st|nd|rd|th)?\\s*(${monthNames})\\b`, 'i');
+
+        let match = cleanName.match(monthFirstRegex);
+        let monthStr = '', dayStr = '';
+
+        if (match) {
+            monthStr = match[1];
+            dayStr = match[2];
+        } else {
+            match = cleanName.match(dayFirstRegex);
+            if (match) {
+                dayStr = match[1];
+                monthStr = match[2];
+            }
+        }
+
+        if (monthStr && dayStr) {
+            const m = monthMap[monthStr.toLowerCase()];
+            const d = parseInt(dayStr, 10);
+
+            const yearMatch = cleanName.match(/\b(20\d{2})\b/);
+            const y = yearMatch ? parseInt(yearMatch[1], 10) : 2026;
+
+            if (m !== undefined && d >= 1 && d <= 31) {
+                return new Date(Date.UTC(y, m, d));
+            }
+        }
+
+        // Secondary check for ISO format YYYY-MM-DD
+        const isoMatch = cleanName.match(/\b(20\d{2})[\s\-\/\.]*(0?[1-9]|1[0-2])[\s\-\/\.]*([0-2]?[0-9]|3[01])\b/);
+        if (isoMatch) {
+            return new Date(Date.UTC(parseInt(isoMatch[1], 10), parseInt(isoMatch[2], 10) - 1, parseInt(isoMatch[3], 10)));
+        }
+
+        return null;
+    }
+
+    function formatExtractedDate(fileName) {
+        const d = parseDateFromFileName(fileName);
+        if (!d) return null;
+        const months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+        return `${months[d.getUTCMonth()]} ${d.getUTCDate()}`;
+    }
+
+    async function copyFormattedTableToClipboard(htmlString, tsvText) {
+        if (navigator.clipboard && window.ClipboardItem) {
+            try {
+                const htmlBlob = new Blob([htmlString], { type: 'text/html' });
+                const textBlob = new Blob([tsvText], { type: 'text/plain' });
+                await navigator.clipboard.write([
+                    new ClipboardItem({
+                        'text/html': htmlBlob,
+                        'text/plain': textBlob
+                    })
+                ]);
+                return true;
+            } catch (err) {
+                console.warn('ClipboardItem API failed, using fallback', err);
+            }
+        }
+
+        const div = document.createElement('div');
+        div.innerHTML = htmlString;
+        div.style.position = 'fixed';
+        div.style.left = '-9999px';
+        div.style.top = '-9999px';
+        document.body.appendChild(div);
+
+        const range = document.createRange();
+        range.selectNodeContents(div);
+        const sel = window.getSelection();
+        sel.removeAllRanges();
+        sel.addRange(range);
+
+        let success = false;
+        try {
+            success = document.execCommand('copy');
+        } catch (e) {
+            console.error('execCommand copy failed', e);
+        }
+
+        sel.removeAllRanges();
+        document.body.removeChild(div);
+
+        if (!success && navigator.clipboard) {
+            await navigator.clipboard.writeText(tsvText);
+        }
+        return true;
+    }
+
     // Tab Switching Logic
     const tabLinks = document.querySelectorAll('.nav-links li[data-tab]');
     const tabContents = document.querySelectorAll('.content-body > .tab-content');
@@ -276,7 +393,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const uc = String(row[ucCol] || 'N/A').trim();
 
             districts.add(dist);
-            
+
             if (!tehsilsMap.has(dist)) tehsilsMap.set(dist, new Set());
             tehsilsMap.get(dist).add(teh);
 
@@ -954,7 +1071,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         tehsilFinalData = Object.values(groups);
-        
+
         renderTehsilTable(tehsilFinalData);
 
         // Show actions wrapper if we have data
@@ -1021,7 +1138,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     // Copy for Excel - Tehsil Summary
-    document.getElementById('tehsil-copy-btn')?.addEventListener('click', () => {
+    document.getElementById('tehsil-copy-btn')?.addEventListener('click', async () => {
         if (tehsilFinalData.length === 0) return;
 
         const headers = [
@@ -1033,9 +1150,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const lines = [headers.join('\t')];
 
-        tehsilFinalData.forEach(g => {
+        const tbodyRows = tehsilFinalData.map((g, idx) => {
             const formatPct = (sub) => sub.users > 0 ? ((sub.zeroHouse / sub.users) * 100).toFixed(2) + '%' : '0.00%';
-            
+
             const line = [
                 g.district, g.tehsil,
                 g.total.users, g.total.active, g.total.zeroHouse, formatPct(g.total), g.total.houses, g.total.dist['1-5'], g.total.dist['6-10'], g.total.dist['11+'],
@@ -1043,7 +1160,70 @@ document.addEventListener('DOMContentLoaded', () => {
                 g.cho.users, g.cho.active, g.cho.zeroHouse, formatPct(g.cho), g.cho.houses, g.cho.dist['1-5'], g.cho.dist['6-10'], g.cho.dist['11+']
             ];
             lines.push(line.join('\t'));
-        });
+
+            const rowBg = idx % 2 === 0 ? '#ffffff' : '#f9fafc';
+            const ovBg = idx % 2 === 0 ? '#f2f5f9' : '#e6ecf5';
+            const lhwBg = idx % 2 === 0 ? '#edf7fa' : '#dfedf2';
+            const choBg = idx % 2 === 0 ? '#edf7f0' : '#dfeedf';
+
+            return `
+                <tr style="background-color: ${rowBg};">
+                    <td style="padding: 6px 10px; border: 1px solid #d9d9d9; font-weight: bold; text-align: left;">${g.district}</td>
+                    <td style="padding: 6px 10px; border: 1px solid #d9d9d9; font-weight: bold; text-align: left;">${g.tehsil}</td>
+                    <td style="padding: 6px 10px; border: 1px solid #d9d9d9; background-color: ${ovBg}; text-align: right;">${g.total.users}</td>
+                    <td style="padding: 6px 10px; border: 1px solid #d9d9d9; background-color: ${ovBg}; text-align: right;">${g.total.active}</td>
+                    <td style="padding: 6px 10px; border: 1px solid #d9d9d9; background-color: ${ovBg}; text-align: right;">${g.total.zeroHouse}</td>
+                    <td style="padding: 6px 10px; border: 1px solid #d9d9d9; background-color: ${ovBg}; text-align: right; color: #c00000; font-weight: bold;">${formatPct(g.total)}</td>
+                    <td style="padding: 6px 10px; border: 1px solid #d9d9d9; background-color: ${ovBg}; text-align: right;">${g.total.houses}</td>
+                    <td style="padding: 6px 10px; border: 1px solid #d9d9d9; background-color: ${ovBg}; text-align: right;">${g.total.dist['1-5']}</td>
+                    <td style="padding: 6px 10px; border: 1px solid #d9d9d9; background-color: ${ovBg}; text-align: right;">${g.total.dist['6-10']}</td>
+                    <td style="padding: 6px 10px; border: 1px solid #d9d9d9; background-color: ${ovBg}; text-align: right;">${g.total.dist['11+']}</td>
+                    <td style="padding: 6px 10px; border: 1px solid #d9d9d9; background-color: ${lhwBg}; text-align: right;">${g.lhw.users}</td>
+                    <td style="padding: 6px 10px; border: 1px solid #d9d9d9; background-color: ${lhwBg}; text-align: right;">${g.lhw.active}</td>
+                    <td style="padding: 6px 10px; border: 1px solid #d9d9d9; background-color: ${lhwBg}; text-align: right;">${g.lhw.zeroHouse}</td>
+                    <td style="padding: 6px 10px; border: 1px solid #d9d9d9; background-color: ${lhwBg}; text-align: right; color: #c00000; font-weight: bold;">${formatPct(g.lhw)}</td>
+                    <td style="padding: 6px 10px; border: 1px solid #d9d9d9; background-color: ${lhwBg}; text-align: right;">${g.lhw.houses}</td>
+                    <td style="padding: 6px 10px; border: 1px solid #d9d9d9; background-color: ${lhwBg}; text-align: right;">${g.lhw.dist['1-5']}</td>
+                    <td style="padding: 6px 10px; border: 1px solid #d9d9d9; background-color: ${lhwBg}; text-align: right;">${g.lhw.dist['6-10']}</td>
+                    <td style="padding: 6px 10px; border: 1px solid #d9d9d9; background-color: ${lhwBg}; text-align: right;">${g.lhw.dist['11+']}</td>
+                    <td style="padding: 6px 10px; border: 1px solid #d9d9d9; background-color: ${choBg}; text-align: right;">${g.cho.users}</td>
+                    <td style="padding: 6px 10px; border: 1px solid #d9d9d9; background-color: ${choBg}; text-align: right;">${g.cho.active}</td>
+                    <td style="padding: 6px 10px; border: 1px solid #d9d9d9; background-color: ${choBg}; text-align: right;">${g.cho.zeroHouse}</td>
+                    <td style="padding: 6px 10px; border: 1px solid #d9d9d9; background-color: ${choBg}; text-align: right; color: #c00000; font-weight: bold;">${formatPct(g.cho)}</td>
+                    <td style="padding: 6px 10px; border: 1px solid #d9d9d9; background-color: ${choBg}; text-align: right;">${g.cho.houses}</td>
+                    <td style="padding: 6px 10px; border: 1px solid #d9d9d9; background-color: ${choBg}; text-align: right;">${g.cho.dist['1-5']}</td>
+                    <td style="padding: 6px 10px; border: 1px solid #d9d9d9; background-color: ${choBg}; text-align: right;">${g.cho.dist['6-10']}</td>
+                    <td style="padding: 6px 10px; border: 1px solid #d9d9d9; background-color: ${choBg}; text-align: right;">${g.cho.dist['11+']}</td>
+                </tr>
+            `;
+        }).join('');
+
+        const subHeaders = ['Total Users', 'Active', '0 Houses', 'Non Active %', 'Total Houses', '1-5', '6-10', '11+'];
+        const subHeaderCells = (bgColor) => subHeaders.map(sh =>
+            `<th style="background-color: ${bgColor}; color: #ffffff; font-weight: bold; padding: 6px 8px; border: 1px solid #ffffff; text-align: right; font-size: 10pt; mso-number-format:'\\@';">${sh}</th>`
+        ).join('');
+
+        const htmlTable = `
+            <table style="border-collapse: collapse; font-family: Calibri, Arial, sans-serif; font-size: 11pt; width: 100%;">
+                <thead>
+                    <tr>
+                        <th rowspan="2" style="background-color: #1f4e78; color: #ffffff; font-weight: bold; padding: 8px 10px; border: 1px solid #ffffff; text-align: left; vertical-align: middle;">District</th>
+                        <th rowspan="2" style="background-color: #1f4e78; color: #ffffff; font-weight: bold; padding: 8px 10px; border: 1px solid #ffffff; text-align: left; vertical-align: middle;">Tehsil</th>
+                        <th colspan="8" style="background-color: #2f5597; color: #ffffff; font-weight: bold; padding: 8px 10px; border: 1px solid #ffffff; text-align: center;">Overall Stats</th>
+                        <th colspan="8" style="background-color: #1b7a99; color: #ffffff; font-weight: bold; padding: 8px 10px; border: 1px solid #ffffff; text-align: center;">Lady Health Workers (LHW)</th>
+                        <th colspan="8" style="background-color: #276a3c; color: #ffffff; font-weight: bold; padding: 8px 10px; border: 1px solid #ffffff; text-align: center;">Community Health Inspector (CHI)</th>
+                    </tr>
+                    <tr>
+                        ${subHeaderCells('#3a669b')}
+                        ${subHeaderCells('#2496bb')}
+                        ${subHeaderCells('#32854e')}
+                    </tr>
+                </thead>
+                <tbody>
+                    ${tbodyRows}
+                </tbody>
+            </table>
+        `;
 
         const tsvText = lines.join('\n');
         const feedback = document.getElementById('tehsil-copy-feedback');
@@ -1056,17 +1236,8 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         };
 
-        navigator.clipboard.writeText(tsvText).then(showSuccess).catch(() => {
-            const ta = document.createElement('textarea');
-            ta.value = tsvText;
-            ta.style.position = 'fixed';
-            ta.style.opacity = '0';
-            document.body.appendChild(ta);
-            ta.select();
-            document.execCommand('copy');
-            document.body.removeChild(ta);
-            showSuccess();
-        });
+        await copyFormattedTableToClipboard(htmlTable, tsvText);
+        showSuccess();
     });
 
     // Export to Excel - Tehsil Summary
@@ -1203,7 +1374,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         districtFinalData = Object.values(groups);
-        
+
         renderDistrictTable(districtFinalData);
 
         // Show actions wrapper if we have data
@@ -1269,7 +1440,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     // Copy for Excel - District Summary
-    document.getElementById('district-copy-btn')?.addEventListener('click', () => {
+    document.getElementById('district-copy-btn')?.addEventListener('click', async () => {
         if (districtFinalData.length === 0) return;
 
         const headers = [
@@ -1281,9 +1452,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const lines = [headers.join('\t')];
 
-        districtFinalData.forEach(g => {
+        const tbodyRows = districtFinalData.map((g, idx) => {
             const formatPct = (sub) => sub.users > 0 ? ((sub.zeroHouse / sub.users) * 100).toFixed(2) + '%' : '0.00%';
-            
+
             const line = [
                 g.district,
                 g.total.users, g.total.active, g.total.zeroHouse, formatPct(g.total), g.total.houses, g.total.dist['1-5'], g.total.dist['6-10'], g.total.dist['11+'],
@@ -1291,7 +1462,68 @@ document.addEventListener('DOMContentLoaded', () => {
                 g.cho.users, g.cho.active, g.cho.zeroHouse, formatPct(g.cho), g.cho.houses, g.cho.dist['1-5'], g.cho.dist['6-10'], g.cho.dist['11+']
             ];
             lines.push(line.join('\t'));
-        });
+
+            const rowBg = idx % 2 === 0 ? '#ffffff' : '#f9fafc';
+            const ovBg = idx % 2 === 0 ? '#f2f5f9' : '#e6ecf5';
+            const lhwBg = idx % 2 === 0 ? '#edf7fa' : '#dfedf2';
+            const choBg = idx % 2 === 0 ? '#edf7f0' : '#dfeedf';
+
+            return `
+                <tr style="background-color: ${rowBg};">
+                    <td style="padding: 6px 10px; border: 1px solid #d9d9d9; font-weight: bold; text-align: left;">${g.district}</td>
+                    <td style="padding: 6px 10px; border: 1px solid #d9d9d9; background-color: ${ovBg}; text-align: right;">${g.total.users}</td>
+                    <td style="padding: 6px 10px; border: 1px solid #d9d9d9; background-color: ${ovBg}; text-align: right;">${g.total.active}</td>
+                    <td style="padding: 6px 10px; border: 1px solid #d9d9d9; background-color: ${ovBg}; text-align: right;">${g.total.zeroHouse}</td>
+                    <td style="padding: 6px 10px; border: 1px solid #d9d9d9; background-color: ${ovBg}; text-align: right; color: #c00000; font-weight: bold;">${formatPct(g.total)}</td>
+                    <td style="padding: 6px 10px; border: 1px solid #d9d9d9; background-color: ${ovBg}; text-align: right;">${g.total.houses}</td>
+                    <td style="padding: 6px 10px; border: 1px solid #d9d9d9; background-color: ${ovBg}; text-align: right;">${g.total.dist['1-5']}</td>
+                    <td style="padding: 6px 10px; border: 1px solid #d9d9d9; background-color: ${ovBg}; text-align: right;">${g.total.dist['6-10']}</td>
+                    <td style="padding: 6px 10px; border: 1px solid #d9d9d9; background-color: ${ovBg}; text-align: right;">${g.total.dist['11+']}</td>
+                    <td style="padding: 6px 10px; border: 1px solid #d9d9d9; background-color: ${lhwBg}; text-align: right;">${g.lhw.users}</td>
+                    <td style="padding: 6px 10px; border: 1px solid #d9d9d9; background-color: ${lhwBg}; text-align: right;">${g.lhw.active}</td>
+                    <td style="padding: 6px 10px; border: 1px solid #d9d9d9; background-color: ${lhwBg}; text-align: right;">${g.lhw.zeroHouse}</td>
+                    <td style="padding: 6px 10px; border: 1px solid #d9d9d9; background-color: ${lhwBg}; text-align: right; color: #c00000; font-weight: bold;">${formatPct(g.lhw)}</td>
+                    <td style="padding: 6px 10px; border: 1px solid #d9d9d9; background-color: ${lhwBg}; text-align: right;">${g.lhw.houses}</td>
+                    <td style="padding: 6px 10px; border: 1px solid #d9d9d9; background-color: ${lhwBg}; text-align: right;">${g.lhw.dist['1-5']}</td>
+                    <td style="padding: 6px 10px; border: 1px solid #d9d9d9; background-color: ${lhwBg}; text-align: right;">${g.lhw.dist['6-10']}</td>
+                    <td style="padding: 6px 10px; border: 1px solid #d9d9d9; background-color: ${lhwBg}; text-align: right;">${g.lhw.dist['11+']}</td>
+                    <td style="padding: 6px 10px; border: 1px solid #d9d9d9; background-color: ${choBg}; text-align: right;">${g.cho.users}</td>
+                    <td style="padding: 6px 10px; border: 1px solid #d9d9d9; background-color: ${choBg}; text-align: right;">${g.cho.active}</td>
+                    <td style="padding: 6px 10px; border: 1px solid #d9d9d9; background-color: ${choBg}; text-align: right;">${g.cho.zeroHouse}</td>
+                    <td style="padding: 6px 10px; border: 1px solid #d9d9d9; background-color: ${choBg}; text-align: right; color: #c00000; font-weight: bold;">${formatPct(g.cho)}</td>
+                    <td style="padding: 6px 10px; border: 1px solid #d9d9d9; background-color: ${choBg}; text-align: right;">${g.cho.houses}</td>
+                    <td style="padding: 6px 10px; border: 1px solid #d9d9d9; background-color: ${choBg}; text-align: right;">${g.cho.dist['1-5']}</td>
+                    <td style="padding: 6px 10px; border: 1px solid #d9d9d9; background-color: ${choBg}; text-align: right;">${g.cho.dist['6-10']}</td>
+                    <td style="padding: 6px 10px; border: 1px solid #d9d9d9; background-color: ${choBg}; text-align: right;">${g.cho.dist['11+']}</td>
+                </tr>
+            `;
+        }).join('');
+
+        const subHeaders = ['Total Users', 'Active', '0 Houses', 'Non Active %', 'Total Houses', '1-5', '6-10', '11+'];
+        const subHeaderCells = (bgColor) => subHeaders.map(sh =>
+            `<th style="background-color: ${bgColor}; color: #ffffff; font-weight: bold; padding: 6px 8px; border: 1px solid #ffffff; text-align: right; font-size: 10pt; mso-number-format:'\\@';">${sh}</th>`
+        ).join('');
+
+        const htmlTable = `
+            <table style="border-collapse: collapse; font-family: Calibri, Arial, sans-serif; font-size: 11pt; width: 100%;">
+                <thead>
+                    <tr>
+                        <th rowspan="2" style="background-color: #1f4e78; color: #ffffff; font-weight: bold; padding: 8px 10px; border: 1px solid #ffffff; text-align: left; vertical-align: middle;">District</th>
+                        <th colspan="8" style="background-color: #2f5597; color: #ffffff; font-weight: bold; padding: 8px 10px; border: 1px solid #ffffff; text-align: center;">Overall Stats</th>
+                        <th colspan="8" style="background-color: #1b7a99; color: #ffffff; font-weight: bold; padding: 8px 10px; border: 1px solid #ffffff; text-align: center;">Lady Health Workers (LHW)</th>
+                        <th colspan="8" style="background-color: #276a3c; color: #ffffff; font-weight: bold; padding: 8px 10px; border: 1px solid #ffffff; text-align: center;">Community Health Inspector (CHI)</th>
+                    </tr>
+                    <tr>
+                        ${subHeaderCells('#3a669b')}
+                        ${subHeaderCells('#2496bb')}
+                        ${subHeaderCells('#32854e')}
+                    </tr>
+                </thead>
+                <tbody>
+                    ${tbodyRows}
+                </tbody>
+            </table>
+        `;
 
         const tsvText = lines.join('\n');
         const feedback = document.getElementById('district-copy-feedback');
@@ -1304,17 +1536,8 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         };
 
-        navigator.clipboard.writeText(tsvText).then(showSuccess).catch(() => {
-            const ta = document.createElement('textarea');
-            ta.value = tsvText;
-            ta.style.position = 'fixed';
-            ta.style.opacity = '0';
-            document.body.appendChild(ta);
-            ta.select();
-            document.execCommand('copy');
-            document.body.removeChild(ta);
-            showSuccess();
-        });
+        await copyFormattedTableToClipboard(htmlTable, tsvText);
+        showSuccess();
     });
 
     // Export to Excel - District Summary
@@ -1622,7 +1845,7 @@ document.addEventListener('DOMContentLoaded', () => {
             // Logic: 
             // File 1: Col E (index 4) = CNIC, Col F (index 5) = Designation
             // File 2: Col E (index 4) = CNIC, Col G (index 6) = Total Premises
-            
+
             // Map File 2 for quick lookup
             const file2Map = new Map();
             data2.forEach((row, idx) => {
@@ -1656,23 +1879,23 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (designation.includes("community health inspector") || designation.includes("chi")) {
                     const cnicRaw = String(row[4] || '').trim();
                     const cnic = cnicRaw.replace(/[^0-9]/g, '');
-                    
+
                     file1Cnics.add(cnic);
 
                     const meta = file1FullMap.get(cnic);
 
                     if (file2Map.has(cnic)) {
-                        results.push({ 
-                            tehsil: meta.tehsil, uc: meta.uc, nameOfCadre: meta.name, 
-                            cnic: cnicRaw, 
+                        results.push({
+                            tehsil: meta.tehsil, uc: meta.uc, nameOfCadre: meta.name,
+                            cnic: cnicRaw,
                             premises: file2Map.get(cnic),
                             status: "Match"
                         });
                     } else {
-                        results.push({ 
-                            tehsil: meta.tehsil, uc: meta.uc, nameOfCadre: meta.name, 
-                            cnic: cnicRaw, 
-                            premises: "0", 
+                        results.push({
+                            tehsil: meta.tehsil, uc: meta.uc, nameOfCadre: meta.name,
+                            cnic: cnicRaw,
+                            premises: "0",
                             status: "Disable"
                         });
                     }
@@ -1684,11 +1907,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (idx === 0) return; // Skip header
                 const cnicRaw = String(row[4] || '').trim();
                 const cnic = cnicRaw.replace(/[^0-9]/g, '');
-                
+
                 if (cnic && !file1Cnics.has(cnic)) {
                     // Try to get metadata from File 1 first
                     let meta = file1FullMap.get(cnic);
-                    
+
                     // If not in File 1, pick info from File 2 (Current row)
                     if (!meta) {
                         meta = {
@@ -1729,7 +1952,8 @@ document.addEventListener('DOMContentLoaded', () => {
                         <td class="fw-bold">${r.premises}</td>
                         <td>${statusBadge}</td>
                     </tr>
-                `;}).join('');
+                `;
+                }).join('');
                 attStatus.innerHTML = `<span class="text-success">Processed ${results.length} records successfully!</span>`;
                 attExportBtn.disabled = false;
             } else {
@@ -1748,11 +1972,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
     attExportBtn?.addEventListener('click', () => {
         if (attFinalData.length === 0) return;
-        const ws = XLSX.utils.json_to_sheet(attFinalData.map(d => ({ 
+        const ws = XLSX.utils.json_to_sheet(attFinalData.map(d => ({
             "Tehsil": d.tehsil,
             "UC": d.uc,
             "Name of Cadre": d.nameOfCadre,
-            "CNIC": d.cnic, 
+            "CNIC": d.cnic,
             "Total Premises": d.premises,
             "Status": d.status
         })));
@@ -1825,8 +2049,20 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     multiFileInput?.addEventListener('change', async (e) => {
-        const files = Array.from(e.target.files);
+        let files = Array.from(e.target.files);
         if (files.length === 0) return;
+
+        // Sort files in date-wise ascending order by parsing month and date from file name (e.g. "Total_House_Registration_july 17", "july 5", etc.)
+        files.sort((a, b) => {
+            const dA = parseDateFromFileName(a.name);
+            const dB = parseDateFromFileName(b.name);
+            if (dA && dB) {
+                return dA.getTime() - dB.getTime();
+            }
+            if (dA) return -1;
+            if (dB) return 1;
+            return a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' });
+        });
 
         multiFileStatus.innerHTML = `<span class="spinner-border spinner-border-sm me-2"></span>Processing ${files.length} file(s)...`;
         multiSummaryContainer.innerHTML = '';
@@ -1849,7 +2085,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 allFileSummaries.push({ fileName: file.name, error: err.message });
             }
         }
-        
+
         multiFileStatus.innerHTML = `<span class="text-success">Finished processing ${files.length} file(s).</span>`;
         multiFileInput.value = ''; // Reset input
 
@@ -1863,11 +2099,12 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     // --- COPY ALL FOR EXCEL ---
-    multiCopyAllBtn?.addEventListener('click', () => {
+    multiCopyAllBtn?.addEventListener('click', async () => {
         const validSummaries = allFileSummaries.filter(item => !item.error);
         if (validSummaries.length === 0) return;
 
         const tsvLines = [];
+        let htmlTables = '';
 
         if (currentMultiViewMode === 'district') {
             const HEADERS = [
@@ -1876,6 +2113,83 @@ document.addEventListener('DOMContentLoaded', () => {
                 'Total Users (LHW)', 'Active (LHW)', '0 Houses (LHW)', 'Non Active % (LHW)', 'Total Houses (LHW)', '1-5 (LHW)', '6-10 (LHW)', '11+ (LHW)',
                 'Total Users (CHI)', 'Active (CHI)', '0 Houses (CHI)', 'Non Active % (CHI)', 'Total Houses (CHI)', '1-5 (CHI)', '6-10 (CHI)', '11+ (CHI)'
             ];
+
+            const htmlParts = validSummaries.map(({ fileName, results }) => {
+                const dateStr = formatExtractedDate(fileName);
+                const headerTitle = dateStr ? `${fileName} &nbsp;|&nbsp; Date: ${dateStr} - District Wise Summary` : `${fileName} - District Wise Summary`;
+                const districtList = results.districtWise || [];
+                const tbodyRows = districtList.map((g, idx) => {
+                    const formatPct = (sub) => sub.users > 0 ? ((sub.zeroHouse / sub.users) * 100).toFixed(2) + '%' : '0.00%';
+                    const rowBg = idx % 2 === 0 ? '#ffffff' : '#f9fafc';
+                    const ovBg = idx % 2 === 0 ? '#f2f5f9' : '#e6ecf5';
+                    const lhwBg = idx % 2 === 0 ? '#edf7fa' : '#dfedf2';
+                    const choBg = idx % 2 === 0 ? '#edf7f0' : '#dfeedf';
+
+                    return `
+                        <tr style="background-color: ${rowBg};">
+                            <td style="padding: 6px 10px; border: 1px solid #d9d9d9; font-weight: bold; text-align: left;">${g.district}</td>
+                            <td style="padding: 6px 10px; border: 1px solid #d9d9d9; background-color: ${ovBg}; text-align: right;">${g.total.users}</td>
+                            <td style="padding: 6px 10px; border: 1px solid #d9d9d9; background-color: ${ovBg}; text-align: right;">${g.total.active}</td>
+                            <td style="padding: 6px 10px; border: 1px solid #d9d9d9; background-color: ${ovBg}; text-align: right;">${g.total.zeroHouse}</td>
+                            <td style="padding: 6px 10px; border: 1px solid #d9d9d9; background-color: ${ovBg}; text-align: right; color: #c00000; font-weight: bold;">${formatPct(g.total)}</td>
+                            <td style="padding: 6px 10px; border: 1px solid #d9d9d9; background-color: ${ovBg}; text-align: right;">${g.total.houses}</td>
+                            <td style="padding: 6px 10px; border: 1px solid #d9d9d9; background-color: ${ovBg}; text-align: right;">${g.total.dist['1-5']}</td>
+                            <td style="padding: 6px 10px; border: 1px solid #d9d9d9; background-color: ${ovBg}; text-align: right;">${g.total.dist['6-10']}</td>
+                            <td style="padding: 6px 10px; border: 1px solid #d9d9d9; background-color: ${ovBg}; text-align: right;">${g.total.dist['11+']}</td>
+
+                            <td style="padding: 6px 10px; border: 1px solid #d9d9d9; background-color: ${lhwBg}; text-align: right;">${g.lhw.users}</td>
+                            <td style="padding: 6px 10px; border: 1px solid #d9d9d9; background-color: ${lhwBg}; text-align: right;">${g.lhw.active}</td>
+                            <td style="padding: 6px 10px; border: 1px solid #d9d9d9; background-color: ${lhwBg}; text-align: right;">${g.lhw.zeroHouse}</td>
+                            <td style="padding: 6px 10px; border: 1px solid #d9d9d9; background-color: ${lhwBg}; text-align: right; color: #c00000; font-weight: bold;">${formatPct(g.lhw)}</td>
+                            <td style="padding: 6px 10px; border: 1px solid #d9d9d9; background-color: ${lhwBg}; text-align: right;">${g.lhw.houses}</td>
+                            <td style="padding: 6px 10px; border: 1px solid #d9d9d9; background-color: ${lhwBg}; text-align: right;">${g.lhw.dist['1-5']}</td>
+                            <td style="padding: 6px 10px; border: 1px solid #d9d9d9; background-color: ${lhwBg}; text-align: right;">${g.lhw.dist['6-10']}</td>
+                            <td style="padding: 6px 10px; border: 1px solid #d9d9d9; background-color: ${lhwBg}; text-align: right;">${g.lhw.dist['11+']}</td>
+
+                            <td style="padding: 6px 10px; border: 1px solid #d9d9d9; background-color: ${choBg}; text-align: right;">${g.cho.users}</td>
+                            <td style="padding: 6px 10px; border: 1px solid #d9d9d9; background-color: ${choBg}; text-align: right;">${g.cho.active}</td>
+                            <td style="padding: 6px 10px; border: 1px solid #d9d9d9; background-color: ${choBg}; text-align: right;">${g.cho.zeroHouse}</td>
+                            <td style="padding: 6px 10px; border: 1px solid #d9d9d9; background-color: ${choBg}; text-align: right; color: #c00000; font-weight: bold;">${formatPct(g.cho)}</td>
+                            <td style="padding: 6px 10px; border: 1px solid #d9d9d9; background-color: ${choBg}; text-align: right;">${g.cho.houses}</td>
+                            <td style="padding: 6px 10px; border: 1px solid #d9d9d9; background-color: ${choBg}; text-align: right;">${g.cho.dist['1-5']}</td>
+                            <td style="padding: 6px 10px; border: 1px solid #d9d9d9; background-color: ${choBg}; text-align: right;">${g.cho.dist['6-10']}</td>
+                            <td style="padding: 6px 10px; border: 1px solid #d9d9d9; background-color: ${choBg}; text-align: right;">${g.cho.dist['11+']}</td>
+                        </tr>
+                    `;
+                }).join('');
+
+                const subHeaders = ['Total Users', 'Active', '0 Houses', 'Non Active %', 'Total Houses', '1-5', '6-10', '11+'];
+                const subHeaderCells = (bgColor) => subHeaders.map(sh =>
+                    `<th style="background-color: ${bgColor}; color: #ffffff; font-weight: bold; padding: 6px 8px; border: 1px solid #ffffff; text-align: right; font-size: 10pt; mso-number-format:'\\@';">${sh}</th>`
+                ).join('');
+
+                return `
+                    <table style="border-collapse: collapse; font-family: Calibri, Arial, sans-serif; font-size: 11pt; margin-bottom: 25px; width: 100%;">
+                        <thead>
+                            <tr>
+                                <th colspan="25" style="background-color: #1f4e78; color: #ffffff; font-size: 12pt; font-weight: bold; padding: 10px; text-align: left; border: 1px solid #1f4e78;">
+                                    ${headerTitle}
+                                </th>
+                            </tr>
+                            <tr>
+                                <th rowspan="2" style="background-color: #1f4e78; color: #ffffff; font-weight: bold; padding: 8px 10px; border: 1px solid #ffffff; text-align: left; vertical-align: middle;">District</th>
+                                <th colspan="8" style="background-color: #2f5597; color: #ffffff; font-weight: bold; padding: 8px 10px; border: 1px solid #ffffff; text-align: center;">Overall Stats</th>
+                                <th colspan="8" style="background-color: #1b7a99; color: #ffffff; font-weight: bold; padding: 8px 10px; border: 1px solid #ffffff; text-align: center;">Lady Health Workers (LHW)</th>
+                                <th colspan="8" style="background-color: #276a3c; color: #ffffff; font-weight: bold; padding: 8px 10px; border: 1px solid #ffffff; text-align: center;">Community Health Inspector (CHI)</th>
+                            </tr>
+                            <tr>
+                                ${subHeaderCells('#3a669b')}
+                                ${subHeaderCells('#2496bb')}
+                                ${subHeaderCells('#32854e')}
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${tbodyRows}
+                        </tbody>
+                    </table>
+                `;
+            });
+            htmlTables = htmlParts.join('<br/><br/>');
 
             validSummaries.forEach(({ fileName, results }, idx) => {
                 if (idx > 0) tsvLines.push('');
@@ -1901,6 +2215,86 @@ document.addEventListener('DOMContentLoaded', () => {
                 'Total Users (LHW)', 'Active (LHW)', '0 Houses (LHW)', 'Non Active % (LHW)', 'Total Houses (LHW)', '1-5 (LHW)', '6-10 (LHW)', '11+ (LHW)',
                 'Total Users (CHI)', 'Active (CHI)', '0 Houses (CHI)', 'Non Active % (CHI)', 'Total Houses (CHI)', '1-5 (CHI)', '6-10 (CHI)', '11+ (CHI)'
             ];
+
+            const htmlParts = validSummaries.map(({ fileName, results }) => {
+                const dateStr = formatExtractedDate(fileName);
+                const headerTitle = dateStr ? `${fileName} &nbsp;|&nbsp; Date: ${dateStr} - Tehsil Wise Summary` : `${fileName} - Tehsil Wise Summary`;
+                const tehsilList = results.tehsilWise || [];
+                const tbodyRows = tehsilList.map((g, idx) => {
+                    const formatPct = (sub) => sub.users > 0 ? ((sub.zeroHouse / sub.users) * 100).toFixed(2) + '%' : '0.00%';
+                    const rowBg = idx % 2 === 0 ? '#ffffff' : '#f9fafc';
+                    const ovBg = idx % 2 === 0 ? '#f2f5f9' : '#e6ecf5';
+                    const lhwBg = idx % 2 === 0 ? '#edf7fa' : '#dfedf2';
+                    const choBg = idx % 2 === 0 ? '#edf7f0' : '#dfeedf';
+
+                    return `
+                        <tr style="background-color: ${rowBg};">
+                            <td style="padding: 6px 10px; border: 1px solid #d9d9d9; font-weight: bold; text-align: left;">${g.district}</td>
+                            <td style="padding: 6px 10px; border: 1px solid #d9d9d9; font-weight: bold; text-align: left;">${g.tehsil}</td>
+
+                            <td style="padding: 6px 10px; border: 1px solid #d9d9d9; background-color: ${ovBg}; text-align: right;">${g.total.users}</td>
+                            <td style="padding: 6px 10px; border: 1px solid #d9d9d9; background-color: ${ovBg}; text-align: right;">${g.total.active}</td>
+                            <td style="padding: 6px 10px; border: 1px solid #d9d9d9; background-color: ${ovBg}; text-align: right;">${g.total.zeroHouse}</td>
+                            <td style="padding: 6px 10px; border: 1px solid #d9d9d9; background-color: ${ovBg}; text-align: right; color: #c00000; font-weight: bold;">${formatPct(g.total)}</td>
+                            <td style="padding: 6px 10px; border: 1px solid #d9d9d9; background-color: ${ovBg}; text-align: right;">${g.total.houses}</td>
+                            <td style="padding: 6px 10px; border: 1px solid #d9d9d9; background-color: ${ovBg}; text-align: right;">${g.total.dist['1-5']}</td>
+                            <td style="padding: 6px 10px; border: 1px solid #d9d9d9; background-color: ${ovBg}; text-align: right;">${g.total.dist['6-10']}</td>
+                            <td style="padding: 6px 10px; border: 1px solid #d9d9d9; background-color: ${ovBg}; text-align: right;">${g.total.dist['11+']}</td>
+
+                            <td style="padding: 6px 10px; border: 1px solid #d9d9d9; background-color: ${lhwBg}; text-align: right;">${g.lhw.users}</td>
+                            <td style="padding: 6px 10px; border: 1px solid #d9d9d9; background-color: ${lhwBg}; text-align: right;">${g.lhw.active}</td>
+                            <td style="padding: 6px 10px; border: 1px solid #d9d9d9; background-color: ${lhwBg}; text-align: right;">${g.lhw.zeroHouse}</td>
+                            <td style="padding: 6px 10px; border: 1px solid #d9d9d9; background-color: ${lhwBg}; text-align: right; color: #c00000; font-weight: bold;">${formatPct(g.lhw)}</td>
+                            <td style="padding: 6px 10px; border: 1px solid #d9d9d9; background-color: ${lhwBg}; text-align: right;">${g.lhw.houses}</td>
+                            <td style="padding: 6px 10px; border: 1px solid #d9d9d9; background-color: ${lhwBg}; text-align: right;">${g.lhw.dist['1-5']}</td>
+                            <td style="padding: 6px 10px; border: 1px solid #d9d9d9; background-color: ${lhwBg}; text-align: right;">${g.lhw.dist['6-10']}</td>
+                            <td style="padding: 6px 10px; border: 1px solid #d9d9d9; background-color: ${lhwBg}; text-align: right;">${g.lhw.dist['11+']}</td>
+
+                            <td style="padding: 6px 10px; border: 1px solid #d9d9d9; background-color: ${choBg}; text-align: right;">${g.cho.users}</td>
+                            <td style="padding: 6px 10px; border: 1px solid #d9d9d9; background-color: ${choBg}; text-align: right;">${g.cho.active}</td>
+                            <td style="padding: 6px 10px; border: 1px solid #d9d9d9; background-color: ${choBg}; text-align: right;">${g.cho.zeroHouse}</td>
+                            <td style="padding: 6px 10px; border: 1px solid #d9d9d9; background-color: ${choBg}; text-align: right; color: #c00000; font-weight: bold;">${formatPct(g.cho)}</td>
+                            <td style="padding: 6px 10px; border: 1px solid #d9d9d9; background-color: ${choBg}; text-align: right;">${g.cho.houses}</td>
+                            <td style="padding: 6px 10px; border: 1px solid #d9d9d9; background-color: ${choBg}; text-align: right;">${g.cho.dist['1-5']}</td>
+                            <td style="padding: 6px 10px; border: 1px solid #d9d9d9; background-color: ${choBg}; text-align: right;">${g.cho.dist['6-10']}</td>
+                            <td style="padding: 6px 10px; border: 1px solid #d9d9d9; background-color: ${choBg}; text-align: right;">${g.cho.dist['11+']}</td>
+                        </tr>
+                    `;
+                }).join('');
+
+                const subHeaders = ['Total Users', 'Active', '0 Houses', 'Non Active %', 'Total Houses', '1-5', '6-10', '11+'];
+                const subHeaderCells = (bgColor) => subHeaders.map(sh =>
+                    `<th style="background-color: ${bgColor}; color: #ffffff; font-weight: bold; padding: 6px 8px; border: 1px solid #ffffff; text-align: right; font-size: 10pt; mso-number-format:'\\@';">${sh}</th>`
+                ).join('');
+
+                return `
+                    <table style="border-collapse: collapse; font-family: Calibri, Arial, sans-serif; font-size: 11pt; margin-bottom: 25px; width: 100%;">
+                        <thead>
+                            <tr>
+                                <th colspan="26" style="background-color: #1f4e78; color: #ffffff; font-size: 12pt; font-weight: bold; padding: 10px; text-align: left; border: 1px solid #1f4e78;">
+                                    ${headerTitle}
+                                </th>
+                            </tr>
+                            <tr>
+                                <th rowspan="2" style="background-color: #1f4e78; color: #ffffff; font-weight: bold; padding: 8px 10px; border: 1px solid #ffffff; text-align: left; vertical-align: middle;">District</th>
+                                <th rowspan="2" style="background-color: #1f4e78; color: #ffffff; font-weight: bold; padding: 8px 10px; border: 1px solid #ffffff; text-align: left; vertical-align: middle;">Tehsil</th>
+                                <th colspan="8" style="background-color: #2f5597; color: #ffffff; font-weight: bold; padding: 8px 10px; border: 1px solid #ffffff; text-align: center;">Overall Stats</th>
+                                <th colspan="8" style="background-color: #1b7a99; color: #ffffff; font-weight: bold; padding: 8px 10px; border: 1px solid #ffffff; text-align: center;">Lady Health Workers (LHW)</th>
+                                <th colspan="8" style="background-color: #276a3c; color: #ffffff; font-weight: bold; padding: 8px 10px; border: 1px solid #ffffff; text-align: center;">Community Health Inspector (CHI)</th>
+                            </tr>
+                            <tr>
+                                ${subHeaderCells('#3a669b')}
+                                ${subHeaderCells('#2496bb')}
+                                ${subHeaderCells('#32854e')}
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${tbodyRows}
+                        </tbody>
+                    </table>
+                `;
+            });
+            htmlTables = htmlParts.join('<br/><br/>');
 
             validSummaries.forEach(({ fileName, results }, idx) => {
                 if (idx > 0) tsvLines.push('');
@@ -1932,6 +2326,66 @@ document.addEventListener('DOMContentLoaded', () => {
                 '6-10 Houses',
                 '11+ Houses'
             ];
+
+            const htmlParts = validSummaries.map(({ fileName, results }) => {
+                const dateStr = formatExtractedDate(fileName);
+                const headerTitle = dateStr ? `${fileName} &nbsp;|&nbsp; Date: ${dateStr}` : fileName;
+                const rows = [
+                    { name: 'Overall Users', data: results.overall, isBold: true },
+                    { name: 'Lady Health Workers (LHW)', data: results.lhw, isBold: false },
+                    { name: 'Community Health Inspector (CHI)', data: results.cho, isBold: false }
+                ];
+                if (results.fww && results.fww.totalUsers > 0) {
+                    rows.push({ name: 'Family Welfare Worker (FWW)', data: results.fww, isBold: false });
+                }
+
+                const tbodyRows = rows.map(r => {
+                    const nonActivePct = r.data.totalUsers > 0
+                        ? ((r.data.dist['0'] / r.data.totalUsers) * 100).toFixed(2) + '%'
+                        : '0.00%';
+                    const fontStyle = r.isBold ? 'font-weight: bold; background-color: #f2f5f9;' : 'background-color: #ffffff;';
+                    return `
+                        <tr style="${fontStyle}">
+                            <td style="padding: 7px 12px; border: 1px solid #d9d9d9; text-align: left;">${r.name}</td>
+                            <td style="padding: 7px 12px; border: 1px solid #d9d9d9; text-align: right;">${r.data.totalUsers}</td>
+                            <td style="padding: 7px 12px; border: 1px solid #d9d9d9; text-align: right;">${r.data.activeUsers}</td>
+                            <td style="padding: 7px 12px; border: 1px solid #d9d9d9; text-align: right;">${r.data.dist['0']}</td>
+                            <td style="padding: 7px 12px; border: 1px solid #d9d9d9; text-align: right; color: #c00000; font-weight: bold;">${nonActivePct}</td>
+                            <td style="padding: 7px 12px; border: 1px solid #d9d9d9; text-align: right;">${r.data.totalHouses}</td>
+                            <td style="padding: 7px 12px; border: 1px solid #d9d9d9; text-align: right;">${r.data.dist['1-5']}</td>
+                            <td style="padding: 7px 12px; border: 1px solid #d9d9d9; text-align: right;">${r.data.dist['6-10']}</td>
+                            <td style="padding: 7px 12px; border: 1px solid #d9d9d9; text-align: right;">${r.data.dist['11+']}</td>
+                        </tr>
+                    `;
+                }).join('');
+
+                return `
+                    <table style="border-collapse: collapse; font-family: Calibri, Arial, sans-serif; font-size: 11pt; margin-bottom: 20px; width: 100%;">
+                        <thead>
+                            <tr>
+                                <th colspan="9" style="background-color: #1f4e78; color: #ffffff; font-size: 12pt; font-weight: bold; padding: 10px; text-align: left; border: 1px solid #1f4e78;">
+                                    ${headerTitle}
+                                </th>
+                            </tr>
+                            <tr style="background-color: #2c3e50; color: #ffffff;">
+                                <th style="background-color: #2c3e50; color: #ffffff; font-weight: bold; padding: 8px 12px; border: 1px solid #1b2a38; text-align: left;">Category</th>
+                                <th style="background-color: #2c3e50; color: #ffffff; font-weight: bold; padding: 8px 12px; border: 1px solid #1b2a38; text-align: right;">Total Users</th>
+                                <th style="background-color: #2c3e50; color: #ffffff; font-weight: bold; padding: 8px 12px; border: 1px solid #1b2a38; text-align: right;">Active Users</th>
+                                <th style="background-color: #2c3e50; color: #ffffff; font-weight: bold; padding: 8px 12px; border: 1px solid #1b2a38; text-align: right;">0 Houses</th>
+                                <th style="background-color: #2c3e50; color: #ffffff; font-weight: bold; padding: 8px 12px; border: 1px solid #1b2a38; text-align: right;">Non Active User %</th>
+                                <th style="background-color: #2c3e50; color: #ffffff; font-weight: bold; padding: 8px 12px; border: 1px solid #1b2a38; text-align: right;">Total Houses</th>
+                                <th style="background-color: #2c3e50; color: #ffffff; font-weight: bold; padding: 8px 12px; border: 1px solid #1b2a38; text-align: right;">1-5 Houses</th>
+                                <th style="background-color: #2c3e50; color: #ffffff; font-weight: bold; padding: 8px 12px; border: 1px solid #1b2a38; text-align: right;">6-10 Houses</th>
+                                <th style="background-color: #2c3e50; color: #ffffff; font-weight: bold; padding: 8px 12px; border: 1px solid #1b2a38; text-align: right;">11+ Houses</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${tbodyRows}
+                        </tbody>
+                    </table>
+                `;
+            });
+            htmlTables = htmlParts.join('<br/><br/>');
 
             const buildRow = (rowName, data) => {
                 const nonActivePct = data.totalUsers > 0
@@ -1974,23 +2428,14 @@ document.addEventListener('DOMContentLoaded', () => {
             }, 4000);
         };
 
-        navigator.clipboard.writeText(tsvText).then(showSuccess).catch(() => {
-            const ta = document.createElement('textarea');
-            ta.value = tsvText;
-            ta.style.position = 'fixed';
-            ta.style.opacity = '0';
-            document.body.appendChild(ta);
-            ta.select();
-            document.execCommand('copy');
-            document.body.removeChild(ta);
-            showSuccess();
-        });
+        await copyFormattedTableToClipboard(htmlTables, tsvText);
+        showSuccess();
     });
 
     function calculateSummaryForFile(data) {
         const headers = Object.keys(data[0]);
         const houseCol = headers[6] || headers[headers.length - 1];
-        
+
         let roleCol = headers.find(h => {
             const lowerVal = h.toLowerCase();
             return lowerVal.includes('role') || lowerVal.includes('designation') || lowerVal.includes('category') || lowerVal.includes('position');
@@ -2180,7 +2625,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (currentMultiViewMode === 'district') {
             modeBadge = `<span class="badge bg-info ms-2"><i class="fas fa-city me-1"></i> District Wise</span>`;
             const districtList = results.districtWise || [];
-            
+
             let tbodyContent = '';
             if (districtList.length === 0) {
                 tbodyContent = `<tr><td colspan="25" class="text-center py-4 text-muted">No District data available in this file.</td></tr>`;
@@ -2230,7 +2675,7 @@ document.addEventListener('DOMContentLoaded', () => {
                                 <th rowspan="2" class="align-middle">District</th>
                                 <th colspan="8" class="text-center bg-primary">Overall Stats</th>
                                 <th colspan="8" class="text-center bg-info">Lady Health Workers (LHW)</th>
-                                <th colspan="8" class="text-center bg-success">Community Health Officers (CHO)</th>
+                                <th colspan="8" class="text-center bg-success">Community Health Inspector (CHI)</th>
                             </tr>
                             <tr>
                                 <th>Total Users</th>
@@ -2270,7 +2715,7 @@ document.addEventListener('DOMContentLoaded', () => {
         } else if (currentMultiViewMode === 'tehsil') {
             modeBadge = `<span class="badge bg-success ms-2"><i class="fas fa-map-marked-alt me-1"></i> Tehsil Wise</span>`;
             const tehsilList = results.tehsilWise || [];
-            
+
             let tbodyContent = '';
             if (tehsilList.length === 0) {
                 tbodyContent = `<tr><td colspan="26" class="text-center py-4 text-muted">No Tehsil data available in this file.</td></tr>`;
@@ -2322,7 +2767,7 @@ document.addEventListener('DOMContentLoaded', () => {
                                 <th rowspan="2" class="align-middle">Tehsil</th>
                                 <th colspan="8" class="text-center bg-primary">Overall Stats</th>
                                 <th colspan="8" class="text-center bg-info">Lady Health Workers (LHW)</th>
-                                <th colspan="8" class="text-center bg-success">Community Health Officers (CHO)</th>
+                                <th colspan="8" class="text-center bg-success">Community Health Inspector (CHI)</th>
                             </tr>
                             <tr>
                                 <th>Total Users</th>
@@ -2416,11 +2861,14 @@ document.addEventListener('DOMContentLoaded', () => {
             `;
         }
 
+        const dateStr = formatExtractedDate(fileName);
+        const dateBadge = dateStr ? `<span class="badge bg-warning text-dark ms-2"><i class="fas fa-calendar-alt me-1"></i> Date: ${dateStr}</span>` : '';
+
         const cardHTML = `
             <div class="dashboard-card mb-4">
                 <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
                     <h3 class="card-title text-primary mb-0">
-                        <i class="fas fa-file-excel me-2"></i> ${fileName} ${modeBadge}
+                        <i class="fas fa-file-excel me-2"></i> ${fileName} ${dateBadge} ${modeBadge}
                     </h3>
                 </div>
                 <div class="card-body p-0">
@@ -2428,7 +2876,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 </div>
             </div>
         `;
-        
+
         multiSummaryContainer.insertAdjacentHTML('beforeend', cardHTML);
     }
 

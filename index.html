@@ -38,9 +38,11 @@
                         Dashboard</a></li>
                 <li data-tab="summary"><a href="javascript:void(0)"><i class="fas fa-list-check"></i> Tehsil Summary</a>
                 </li>
-                <li data-tab="district-summary"><a href="javascript:void(0)"><i class="fas fa-city"></i> District Summary</a>
+                <li data-tab="district-summary"><a href="javascript:void(0)"><i class="fas fa-city"></i> District
+                        Summary</a>
                 </li>
-                <li data-tab="multi-summary"><a href="javascript:void(0)"><i class="fas fa-layer-group"></i> Multi-File Summary</a>
+                <li data-tab="multi-summary"><a href="javascript:void(0)"><i class="fas fa-layer-group"></i> Multi-File
+                        Summary</a>
                 </li>
                 <li data-tab="uc-wise"><a href="javascript:void(0)"><i class="fas fa-map-location-dot"></i> UC
                         Analysis</a></li>
@@ -80,33 +82,40 @@
 
             <div class="content-body">
                 <!-- Global Dynamic Calculation & Filter Settings (visible for report tabs once data is uploaded) -->
-                <div id="global-filter-card" class="dashboard-card mb-4" style="display: none; border-left: 5px solid var(--primary-color);">
+                <div id="global-filter-card" class="dashboard-card mb-4"
+                    style="display: none; border-left: 5px solid var(--primary-color);">
                     <div class="card-header d-flex justify-content-between align-items-center">
-                        <h3 class="card-title text-primary"><i class="fas fa-sliders text-primary me-2"></i> Dynamic Calculation & Filter Settings</h3>
-                        <button class="btn btn-sm btn-outline-secondary" id="btn-reset-filters"><i class="fas fa-undo me-1"></i> Reset Filters</button>
+                        <h3 class="card-title text-primary"><i class="fas fa-sliders text-primary me-2"></i> Dynamic
+                            Calculation & Filter Settings</h3>
+                        <button class="btn btn-sm btn-outline-secondary" id="btn-reset-filters"><i
+                                class="fas fa-undo me-1"></i> Reset Filters</button>
                     </div>
                     <div class="card-body">
                         <div class="row g-3">
                             <div class="col-md-3">
-                                <label for="filter-calc-col" class="form-label fw-bold small text-muted">Calculation Column (Metric Source)</label>
+                                <label for="filter-calc-col" class="form-label fw-bold small text-muted">Calculation
+                                    Column (Metric Source)</label>
                                 <select id="filter-calc-col" class="form-select form-select-sm">
                                     <!-- Dynamic list of numeric columns -->
                                 </select>
                             </div>
                             <div class="col-md-3">
-                                <label for="filter-district" class="form-label fw-bold small text-muted">Filter by District</label>
+                                <label for="filter-district" class="form-label fw-bold small text-muted">Filter by
+                                    District</label>
                                 <select id="filter-district" class="form-select form-select-sm">
                                     <option value="ALL">All Districts</option>
                                 </select>
                             </div>
                             <div class="col-md-3">
-                                <label for="filter-tehsil" class="form-label fw-bold small text-muted">Filter by Tehsil</label>
+                                <label for="filter-tehsil" class="form-label fw-bold small text-muted">Filter by
+                                    Tehsil</label>
                                 <select id="filter-tehsil" class="form-select form-select-sm">
                                     <option value="ALL">All Tehsils</option>
                                 </select>
                             </div>
                             <div class="col-md-3">
-                                <label for="filter-uc" class="form-label fw-bold small text-muted">Filter by Union Council (UC)</label>
+                                <label for="filter-uc" class="form-label fw-bold small text-muted">Filter by Union
+                                    Council (UC)</label>
                                 <select id="filter-uc" class="form-select form-select-sm">
                                     <option value="ALL">All UCs</option>
                                 </select>
@@ -114,13 +123,19 @@
                         </div>
                         <div class="row g-3 mt-2">
                             <div class="col-md-12">
-                                <label class="form-label fw-bold small text-muted d-block">Filter by Designation (Select one or more)</label>
+                                <label class="form-label fw-bold small text-muted d-block">Filter by Designation (Select
+                                    one or more)</label>
                                 <div class="d-flex gap-2 mb-2">
-                                    <button type="button" class="btn btn-xs btn-outline-primary py-0 px-2 small" id="btn-desig-select-all" style="font-size: 0.75rem;">Select All</button>
-                                    <button type="button" class="btn btn-xs btn-outline-secondary py-0 px-2 small" id="btn-desig-clear-all" style="font-size: 0.75rem;">Clear All</button>
+                                    <button type="button" class="btn btn-xs btn-outline-primary py-0 px-2 small"
+                                        id="btn-desig-select-all" style="font-size: 0.75rem;">Select All</button>
+                                    <button type="button" class="btn btn-xs btn-outline-secondary py-0 px-2 small"
+                                        id="btn-desig-clear-all" style="font-size: 0.75rem;">Clear All</button>
                                 </div>
-                                <div id="designation-checkbox-container" class="border rounded p-3 bg-light d-flex flex-wrap gap-3" style="max-height: 150px; overflow-y: auto;">
-                                    <span class="text-muted small">Upload an Excel file to see available designations...</span>
+                                <div id="designation-checkbox-container"
+                                    class="border rounded p-3 bg-light d-flex flex-wrap gap-3"
+                                    style="max-height: 150px; overflow-y: auto;">
+                                    <span class="text-muted small">Upload an Excel file to see available
+                                        designations...</span>
                                 </div>
                             </div>
                         </div>
@@ -191,8 +206,8 @@
 
                         <!-- CHO Section -->
                         <div class="section-title mb-4 mt-5">
-                            <h2 class="h4"><i class="fas fa-user-md me-2 text-success"></i> Community Health Officers
-                                (CHO)</h2>
+                            <h2 class="h4"><i class="fas fa-user-md me-2 text-success"></i> Community Health Inspector
+                                (CHI)</h2>
                         </div>
                         <div class="row g-4" id="cho-metrics"></div>
                         <div class="dashboard-card mt-4">
@@ -204,7 +219,8 @@
                         <!-- FWW Section -->
                         <div id="fww-section-container" style="display: none;">
                             <div class="section-title mb-4 mt-5">
-                                <h2 class="h4"><i class="fas fa-briefcase-medical me-2 text-warning"></i> Family Welfare Workers (FWW)</h2>
+                                <h2 class="h4"><i class="fas fa-briefcase-medical me-2 text-warning"></i> Family Welfare
+                                    Workers (FWW)</h2>
                             </div>
                             <div class="row g-4" id="fww-metrics"></div>
                             <div class="dashboard-card mt-4">
@@ -245,14 +261,21 @@
                         </div>
                         <div class="card-body p-0">
                             <div class="table-responsive" style="max-height: 70vh;">
-                                <table class="table table-hover table-bordered mb-0" id="tehsil-summary-table" style="min-width: 1600px;">
+                                <table class="table table-hover table-bordered mb-0" id="tehsil-summary-table"
+                                    style="min-width: 1600px;">
                                     <thead class="table-dark sticky-top">
                                         <tr>
-                                            <th rowspan="2" class="align-middle text-center sticky-column" style="left: 0; min-width: 130px; max-width: 130px; width: 130px; z-index: 11;">District</th>
-                                            <th rowspan="2" class="align-middle text-center sticky-column" style="left: 130px; min-width: 130px; max-width: 130px; width: 130px; z-index: 11; border-right: 2px solid #e3e6f0 !important;">Tehsil</th>
-                                            <th colspan="8" class="text-center bg-primary">All Users (Including LHW & CHI)</th>
+                                            <th rowspan="2" class="align-middle text-center sticky-column"
+                                                style="left: 0; min-width: 130px; max-width: 130px; width: 130px; z-index: 11;">
+                                                District</th>
+                                            <th rowspan="2" class="align-middle text-center sticky-column"
+                                                style="left: 130px; min-width: 130px; max-width: 130px; width: 130px; z-index: 11; border-right: 2px solid #e3e6f0 !important;">
+                                                Tehsil</th>
+                                            <th colspan="8" class="text-center bg-primary">All Users (Including LHW &
+                                                CHI)</th>
                                             <th colspan="8" class="text-center bg-info">Lady Health Workers (LHW)</th>
-                                            <th colspan="8" class="text-center bg-success">Community Health Inspectors (CHI)</th>
+                                            <th colspan="8" class="text-center bg-success">Community Health Inspectors
+                                                (CHI)</th>
                                         </tr>
                                         <tr>
                                             <!-- All Users -->
@@ -263,8 +286,8 @@
                                             <th>Total Houses</th>
                                             <th>1-5</th>
                                             <th>6-10</th>
-                                            <th>11+</th>
-                                            
+                                            <th>10+</th>
+
                                             <!-- LHW -->
                                             <th>Total Users</th>
                                             <th>Active</th>
@@ -273,8 +296,8 @@
                                             <th>Total Houses</th>
                                             <th>1-5</th>
                                             <th>6-10</th>
-                                            <th>11+</th>
-                                            
+                                            <th>10+</th>
+
                                             <!-- CHI -->
                                             <th>Total Users</th>
                                             <th>Active</th>
@@ -283,7 +306,7 @@
                                             <th>Total Houses</th>
                                             <th>1-5</th>
                                             <th>6-10</th>
-                                            <th>11+</th>
+                                            <th>10+</th>
                                         </tr>
                                     </thead>
                                     <tbody id="summary-list-body">
@@ -307,7 +330,8 @@
                                 </div>
                                 <div class="copy-banner-text">
                                     <h4>Export Tehsil Summary</h4>
-                                    <p>Copy the summary data directly to clipboard for Excel, or download it as an Excel spreadsheet.</p>
+                                    <p>Copy the summary data directly to clipboard for Excel, or download it as an Excel
+                                        spreadsheet.</p>
                                 </div>
                             </div>
                             <div class="d-flex flex-column align-items-center align-items-md-end gap-2">
@@ -342,13 +366,18 @@
                         </div>
                         <div class="card-body p-0">
                             <div class="table-responsive" style="max-height: 70vh;">
-                                <table class="table table-hover table-bordered mb-0" id="district-summary-table" style="min-width: 1400px;">
+                                <table class="table table-hover table-bordered mb-0" id="district-summary-table"
+                                    style="min-width: 1400px;">
                                     <thead class="table-dark sticky-top">
                                         <tr>
-                                            <th rowspan="2" class="align-middle text-center sticky-column" style="left: 0; min-width: 150px; max-width: 150px; width: 150px; z-index: 11; border-right: 2px solid #e3e6f0 !important;">District</th>
-                                            <th colspan="8" class="text-center bg-primary">All Users (Including LHW & CHI)</th>
+                                            <th rowspan="2" class="align-middle text-center sticky-column"
+                                                style="left: 0; min-width: 150px; max-width: 150px; width: 150px; z-index: 11; border-right: 2px solid #e3e6f0 !important;">
+                                                District</th>
+                                            <th colspan="8" class="text-center bg-primary">All Users (Including LHW &
+                                                CHI)</th>
                                             <th colspan="8" class="text-center bg-info">Lady Health Workers (LHW)</th>
-                                            <th colspan="8" class="text-center bg-success">Community Health Inspectors (CHI)</th>
+                                            <th colspan="8" class="text-center bg-success">Community Health Inspectors
+                                                (CHI)</th>
                                         </tr>
                                         <tr>
                                             <!-- All Users -->
@@ -359,8 +388,8 @@
                                             <th>Total Houses</th>
                                             <th>1-5</th>
                                             <th>6-10</th>
-                                            <th>11+</th>
-                                            
+                                            <th>10+</th>
+
                                             <!-- LHW -->
                                             <th>Total Users</th>
                                             <th>Active</th>
@@ -369,8 +398,8 @@
                                             <th>Total Houses</th>
                                             <th>1-5</th>
                                             <th>6-10</th>
-                                            <th>11+</th>
-                                            
+                                            <th>10+</th>
+
                                             <!-- CHI -->
                                             <th>Total Users</th>
                                             <th>Active</th>
@@ -379,7 +408,7 @@
                                             <th>Total Houses</th>
                                             <th>1-5</th>
                                             <th>6-10</th>
-                                            <th>11+</th>
+                                            <th>10+</th>
                                         </tr>
                                     </thead>
                                     <tbody id="district-summary-list-body">
@@ -403,7 +432,8 @@
                                 </div>
                                 <div class="copy-banner-text">
                                     <h4>Export District Summary</h4>
-                                    <p>Copy the summary data directly to clipboard for Excel, or download it as an Excel spreadsheet.</p>
+                                    <p>Copy the summary data directly to clipboard for Excel, or download it as an Excel
+                                        spreadsheet.</p>
                                 </div>
                             </div>
                             <div class="d-flex flex-column align-items-center align-items-md-end gap-2">
@@ -425,7 +455,8 @@
                 <div id="tab-multi-summary" class="tab-content" style="display: none;">
                     <section class="welcome-section mb-4">
                         <h1 class="welcome-title text-gradient">Multi-File Summary</h1>
-                        <p class="text-muted">Upload multiple files to calculate and view a summary for each file separately.</p>
+                        <p class="text-muted">Upload multiple files to calculate and view a summary for each file
+                            separately.</p>
                     </section>
 
                     <div class="row mb-4">
@@ -433,10 +464,12 @@
                             <div class="dashboard-card">
                                 <div class="card-body py-5">
                                     <div class="upload-button-wrapper text-center">
-                                        <label for="multi-excel-upload" class="btn btn-primary btn-lg btn-upload shadow-lg px-5">
+                                        <label for="multi-excel-upload"
+                                            class="btn btn-primary btn-lg btn-upload shadow-lg px-5">
                                             <i class="fas fa-cloud-upload-alt me-2"></i> Upload Multiple Files
                                         </label>
-                                        <input type="file" id="multi-excel-upload" accept=".xlsx, .xls, .csv" multiple hidden>
+                                        <input type="file" id="multi-excel-upload" accept=".xlsx, .xls, .csv" multiple
+                                            hidden>
                                         <div id="multi-file-status" class="mt-3 text-muted"></div>
                                     </div>
                                 </div>
@@ -446,16 +479,21 @@
 
                     <div id="multi-summary-controls" class="row mb-4" style="display: none;">
                         <div class="col-12 text-center">
-                            <div class="d-inline-flex align-items-center bg-white p-2 rounded-pill shadow-sm border flex-wrap justify-content-center gap-2">
-                                <span class="fw-bold px-3 text-secondary me-1"><i class="fas fa-layer-group me-2 text-primary"></i>View Summary Mode:</span>
+                            <div
+                                class="d-inline-flex align-items-center bg-white p-2 rounded-pill shadow-sm border flex-wrap justify-content-center gap-2">
+                                <span class="fw-bold px-3 text-secondary me-1"><i
+                                        class="fas fa-layer-group me-2 text-primary"></i>View Summary Mode:</span>
                                 <div class="btn-group" role="group" aria-label="Multi Summary View">
-                                    <button type="button" class="btn btn-primary rounded-pill me-1 px-3 py-2" id="btn-multi-view-overall">
+                                    <button type="button" class="btn btn-primary rounded-pill me-1 px-3 py-2"
+                                        id="btn-multi-view-overall">
                                         <i class="fas fa-list-check me-1"></i> Overall Summary
                                     </button>
-                                    <button type="button" class="btn btn-outline-primary rounded-pill me-1 px-3 py-2" id="btn-multi-view-district">
+                                    <button type="button" class="btn btn-outline-primary rounded-pill me-1 px-3 py-2"
+                                        id="btn-multi-view-district">
                                         <i class="fas fa-city me-1"></i> District Wise
                                     </button>
-                                    <button type="button" class="btn btn-outline-primary rounded-pill px-3 py-2" id="btn-multi-view-tehsil">
+                                    <button type="button" class="btn btn-outline-primary rounded-pill px-3 py-2"
+                                        id="btn-multi-view-tehsil">
                                         <i class="fas fa-map-marked-alt me-1"></i> Tehsil Wise
                                     </button>
                                 </div>
@@ -476,7 +514,8 @@
                                 </div>
                                 <div class="copy-banner-text">
                                     <h4>Ready for Excel Sheet Compilation</h4>
-                                    <p>Click copy button to copy all processed data summaries formatted for immediate paste (Ctrl+V) into Excel.</p>
+                                    <p>Click copy button to copy all processed data summaries formatted for immediate
+                                        paste (Ctrl+V) into Excel.</p>
                                 </div>
                             </div>
                             <div class="d-flex flex-column align-items-center align-items-md-end">
@@ -513,8 +552,8 @@
                                             <th rowspan="2" class="align-middle">Union Council (UC)</th>
                                             <th colspan="7" class="text-center bg-primary">Overall Stats</th>
                                             <th colspan="7" class="text-center bg-info">Lady Health Workers (LHW)</th>
-                                            <th colspan="7" class="text-center bg-success">Community Health Officers
-                                                (CHO)</th>
+                                            <th colspan="7" class="text-center bg-success">Community Health Inspectors
+                                                (CHI)</th>
                                         </tr>
                                         <tr>
                                             <th>Users</th>
@@ -523,7 +562,7 @@
                                             <th>0</th>
                                             <th>1-5</th>
                                             <th>6-10</th>
-                                            <th>11+</th>
+                                            <th>10+</th>
 
                                             <th>Users</th>
                                             <th>Active</th>
@@ -531,7 +570,7 @@
                                             <th>0</th>
                                             <th>1-5</th>
                                             <th>6-10</th>
-                                            <th>11+</th>
+                                            <th>10+</th>
 
                                             <th>Users</th>
                                             <th>Active</th>
@@ -539,7 +578,7 @@
                                             <th>0</th>
                                             <th>1-5</th>
                                             <th>6-10</th>
-                                            <th>11+</th>
+                                            <th>10+</th>
                                         </tr>
                                     </thead>
                                     <tbody id="uc-summary-body">
@@ -712,7 +751,8 @@
                         <div class="col-lg-6">
                             <div class="dashboard-card h-100">
                                 <div class="card-header">
-                                    <h3 class="card-title text-primary"><i class="fas fa-file-invoice me-2"></i>File 1 (CHI List)</h3>
+                                    <h3 class="card-title text-primary"><i class="fas fa-file-invoice me-2"></i>File 1
+                                        (CHI List)</h3>
                                 </div>
                                 <div class="card-body">
                                     <div class="file-upload-wrapper text-center my-3" id="att-wrapper1">
@@ -729,7 +769,8 @@
                         <div class="col-lg-6">
                             <div class="dashboard-card h-100">
                                 <div class="card-header">
-                                    <h3 class="card-title text-success"><i class="fas fa-database me-2"></i>File 2 (Premises Data)</h3>
+                                    <h3 class="card-title text-success"><i class="fas fa-database me-2"></i>File 2
+                                        (Premises Data)</h3>
                                 </div>
                                 <div class="card-body">
                                     <div class="file-upload-wrapper text-center my-3" id="att-wrapper2">
@@ -762,16 +803,17 @@
                             <div class="table-responsive" style="max-height: 500px;">
                                 <table class="table table-hover mb-0">
                                     <thead class="table-light sticky-top">
-                                            <th class="px-4">Tehsil</th>
-                                            <th>UC</th>
-                                            <th>Name of Cadre</th>
-                                            <th>CNIC</th>
-                                            <th>Total Premises</th>
-                                            <th>Status</th>
+                                        <th class="px-4">Tehsil</th>
+                                        <th>UC</th>
+                                        <th>Name of Cadre</th>
+                                        <th>CNIC</th>
+                                        <th>Total Premises</th>
+                                        <th>Status</th>
                                     </thead>
                                     <tbody id="att-results-body">
                                         <tr>
-                                            <td colspan="2" class="text-center py-5 text-muted">Upload files and click process to see results.</td>
+                                            <td colspan="2" class="text-center py-5 text-muted">Upload files and click
+                                                process to see results.</td>
                                         </tr>
                                     </tbody>
                                 </table>
