@@ -200,6 +200,19 @@
                                 <div class="distribution-grid" id="cho-distribution"></div>
                             </div>
                         </div>
+
+                        <!-- FWW Section -->
+                        <div id="fww-section-container" style="display: none;">
+                            <div class="section-title mb-4 mt-5">
+                                <h2 class="h4"><i class="fas fa-briefcase-medical me-2 text-warning"></i> Family Welfare Workers (FWW)</h2>
+                            </div>
+                            <div class="row g-4" id="fww-metrics"></div>
+                            <div class="dashboard-card mt-4">
+                                <div class="card-body">
+                                    <div class="distribution-grid" id="fww-distribution"></div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
 
                     <!-- States -->
@@ -431,6 +444,25 @@
                         </div>
                     </div>
 
+                    <div id="multi-summary-controls" class="row mb-4" style="display: none;">
+                        <div class="col-12 text-center">
+                            <div class="d-inline-flex align-items-center bg-white p-2 rounded-pill shadow-sm border flex-wrap justify-content-center gap-2">
+                                <span class="fw-bold px-3 text-secondary me-1"><i class="fas fa-layer-group me-2 text-primary"></i>View Summary Mode:</span>
+                                <div class="btn-group" role="group" aria-label="Multi Summary View">
+                                    <button type="button" class="btn btn-primary rounded-pill me-1 px-3 py-2" id="btn-multi-view-overall">
+                                        <i class="fas fa-list-check me-1"></i> Overall Summary
+                                    </button>
+                                    <button type="button" class="btn btn-outline-primary rounded-pill me-1 px-3 py-2" id="btn-multi-view-district">
+                                        <i class="fas fa-city me-1"></i> District Wise
+                                    </button>
+                                    <button type="button" class="btn btn-outline-primary rounded-pill px-3 py-2" id="btn-multi-view-tehsil">
+                                        <i class="fas fa-map-marked-alt me-1"></i> Tehsil Wise
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
                     <div id="multi-summary-container">
                         <!-- JS will inject summary tables for each file here -->
                     </div>
@@ -511,7 +543,11 @@
                                         </tr>
                                     </thead>
                                     <tbody id="uc-summary-body">
-                                        <!-- JS will inject UC rows here -->
+                                        <tr>
+                                            <td colspan="22" class="text-center py-5 text-muted">
+                                                Please upload an Excel file on the Dashboard to view the summary.
+                                            </td>
+                                        </tr>
                                     </tbody>
                                 </table>
                             </div>
@@ -765,7 +801,13 @@
                                             <th>Waiting for data...</th>
                                         </tr>
                                     </thead>
-                                    <tbody id="raw-data-body"></tbody>
+                                    <tbody id="raw-data-body">
+                                        <tr>
+                                            <td colspan="2" class="text-center py-5 text-muted">
+                                                Please upload an Excel file on the Dashboard to view the raw data.
+                                            </td>
+                                        </tr>
+                                    </tbody>
                                 </table>
                             </div>
                         </div>

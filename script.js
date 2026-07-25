@@ -27,6 +27,22 @@ document.addEventListener('DOMContentLoaded', () => {
 
     fileInput.addEventListener('change', handleFileUpload);
 
+    // Normalized helper functions for strict role/designation matching
+    function isRowLHW(roleVal) {
+        const val = String(roleVal || '').toLowerCase().replace(/\./g, '').trim();
+        return val === 'lady health worker' || val === 'lhw';
+    }
+
+    function isRowCHO(roleVal) {
+        const val = String(roleVal || '').toLowerCase().replace(/\./g, '').trim();
+        return val === 'community health officer' || val === 'cho' || val === 'chi' || val === 'community health inspector';
+    }
+
+    function isRowFWW(roleVal) {
+        const val = String(roleVal || '').toLowerCase().replace(/\./g, '').trim();
+        return val === 'family welfare worker' || val === 'fww';
+    }
+
     // Tab Switching Logic
     const tabLinks = document.querySelectorAll('.nav-links li[data-tab]');
     const tabContents = document.querySelectorAll('.content-body > .tab-content');
@@ -565,23 +581,14 @@ document.addEventListener('DOMContentLoaded', () => {
             return { totalUsers, activeUsers, totalHouses, dist };
         };
 
-        // Filter datasets based on standard keywords
-        const LHW_KEYWORDS = ['lady health worker', 'lhw'];
-        const CHO_KEYWORDS = ['community health officer', 'cho', 'chi', 'community health inspector'];
-
-        const lhwData = data.filter(row => {
-            const val = String(row[roleCol] || '').toLowerCase().replace(/\./g, '').trim();
-            return val.includes('lady health worker') || val.includes('lhw');
-        });
-
-        const choData = data.filter(row => {
-            const val = String(row[roleCol] || '').toLowerCase();
-            return CHO_KEYWORDS.some(k => val.includes(k));
-        });
+        const lhwData = data.filter(row => isRowLHW(row[roleCol]));
+        const choData = data.filter(row => isRowCHO(row[roleCol]));
+        const fwwData = data.filter(row => isRowFWW(row[roleCol]));
 
         const overallResults = analyze(data);
         const lhwResults = analyze(lhwData);
         const choResults = analyze(choData);
+        const fwwResults = analyze(fwwData);
 
         // Calculate Role Counts for Breakdown
         const roleCounts = {};
@@ -590,7 +597,7 @@ document.addEventListener('DOMContentLoaded', () => {
             roleCounts[r] = (roleCounts[r] || 0) + 1;
         });
 
-        updateDashboard(overallResults, lhwResults, choResults, roleCounts, data, houseCol, roleCol);
+        updateDashboard(overallResults, lhwResults, choResults, fwwResults, roleCounts, data, houseCol, roleCol);
     }
 
     function createMetricCard(label, value, icon, className = '') {
@@ -628,7 +635,7 @@ document.addEventListener('DOMContentLoaded', () => {
         `;
     }
 
-    function updateDashboard(overall, lhw, cho, roleCounts, data, houseCol, roleCol) {
+    function updateDashboard(overall, lhw, cho, fww, roleCounts, data, houseCol, roleCol) {
         // Overall Metrics
         const overallMetricsEl = document.getElementById('overall-metrics');
         overallMetricsEl.innerHTML =
@@ -664,6 +671,23 @@ document.addEventListener('DOMContentLoaded', () => {
             createMetricCard('CHO Houses Covered', cho.totalHouses, 'fa-hospital', 'cho');
 
         document.getElementById('cho-distribution').innerHTML = createDistributionHTML(cho.dist);
+
+        // FWW Metrics
+        const fwwSectionContainer = document.getElementById('fww-section-container');
+        if (fwwSectionContainer) {
+            if (fww && fww.totalUsers > 0) {
+                fwwSectionContainer.style.display = 'block';
+                const fwwMetricsEl = document.getElementById('fww-metrics');
+                fwwMetricsEl.innerHTML =
+                    createMetricCard('FWW Total Users', fww.totalUsers, 'fa-briefcase-medical', 'fww') +
+                    createMetricCard('FWW Active Users', fww.activeUsers, 'fa-file-prescription', 'fww') +
+                    createMetricCard('FWW Houses Covered', fww.totalHouses, 'fa-house-chimney-medical', 'fww');
+
+                document.getElementById('fww-distribution').innerHTML = createDistributionHTML(fww.dist);
+            } else {
+                fwwSectionContainer.style.display = 'none';
+            }
+        }
 
         // Populate Tehsil Summary Tab
         populateTehsilSummary(data, houseCol, roleCol);
@@ -742,17 +766,14 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         // 4. Fill the groups using data
-        const CHO_KEYWORDS = ['community health officer', 'cho', 'chi', 'community health inspector'];
-
         data.forEach(row => {
             const uc = String(row[ucCol] || 'Unknown UC').trim();
             const normUc = uc.toLowerCase();
             const displayKey = keyMap[normUc];
 
             if (displayKey && groups[displayKey]) {
-                const role = String(row[roleCol] || '').toLowerCase().replace(/\./g, '').trim();
-                const isLHW = role.includes('lady health worker') || role.includes('lhw');
-                const isCHO = CHO_KEYWORDS.some(k => role.includes(k));
+                const isLHW = isRowLHW(row[roleCol]);
+                const isCHO = isRowCHO(row[roleCol]);
 
                 let houseCount = row[houseCol];
                 if (houseCount === "-" || houseCount === "" || houseCount === undefined || houseCount === null) {
@@ -897,8 +918,6 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         // 4. Fill the groups using data
-        const CHO_KEYWORDS = ['community health officer', 'cho', 'chi', 'community health inspector'];
-
         data.forEach(row => {
             const district = String(row[districtCol] || 'N/A').trim();
             const tehsil = String(row[tehsilCol] || 'N/A').trim();
@@ -906,9 +925,8 @@ document.addEventListener('DOMContentLoaded', () => {
             const displayKey = keyMap[normKey];
 
             if (displayKey && groups[displayKey]) {
-                const role = String(row[roleCol] || '').toLowerCase().replace(/\./g, '').trim();
-                const isLHW = role.includes('lady health worker') || role.includes('lhw');
-                const isCHO = CHO_KEYWORDS.some(k => role.includes(k));
+                const isLHW = isRowLHW(row[roleCol]);
+                const isCHO = isRowCHO(row[roleCol]);
 
                 let houseCount = row[houseCol];
                 if (houseCount === "-" || houseCount === "" || houseCount === undefined || houseCount === null) {
@@ -1150,17 +1168,14 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         // 4. Fill the groups using data
-        const CHO_KEYWORDS = ['community health officer', 'cho', 'chi', 'community health inspector'];
-
         data.forEach(row => {
             const district = String(row[districtCol] || 'N/A').trim();
             const normDist = district.toLowerCase();
             const displayKey = keyMap[normDist];
 
             if (displayKey && groups[displayKey]) {
-                const role = String(row[roleCol] || '').toLowerCase().replace(/\./g, '').trim();
-                const isLHW = role.includes('lady health worker') || role.includes('lhw');
-                const isCHO = CHO_KEYWORDS.some(k => role.includes(k));
+                const isLHW = isRowLHW(row[roleCol]);
+                const isCHO = isRowCHO(row[roleCol]);
 
                 let houseCount = row[houseCol];
                 if (houseCount === "-" || houseCount === "" || houseCount === undefined || houseCount === null) {
@@ -1753,9 +1768,61 @@ document.addEventListener('DOMContentLoaded', () => {
     const multiCopyBtnWrapper = document.getElementById('multi-copy-btn-wrapper');
     const multiCopyAllBtn = document.getElementById('multi-copy-all-btn');
     const multiCopyFeedback = document.getElementById('multi-copy-feedback');
+    const multiSummaryControls = document.getElementById('multi-summary-controls');
+    const btnMultiViewOverall = document.getElementById('btn-multi-view-overall');
+    const btnMultiViewDistrict = document.getElementById('btn-multi-view-district');
+    const btnMultiViewTehsil = document.getElementById('btn-multi-view-tehsil');
 
-    // Stores data for all processed files so the copy button can access it
+    let currentMultiViewMode = 'overall'; // 'overall' | 'district' | 'tehsil'
+
+    // Stores data for all processed files so the copy button and view switcher can access it
     let allFileSummaries = [];
+
+    function updateMultiViewButtons() {
+        if (btnMultiViewOverall) {
+            btnMultiViewOverall.classList.toggle('btn-primary', currentMultiViewMode === 'overall');
+            btnMultiViewOverall.classList.toggle('btn-outline-primary', currentMultiViewMode !== 'overall');
+        }
+        if (btnMultiViewDistrict) {
+            btnMultiViewDistrict.classList.toggle('btn-primary', currentMultiViewMode === 'district');
+            btnMultiViewDistrict.classList.toggle('btn-outline-primary', currentMultiViewMode !== 'district');
+        }
+        if (btnMultiViewTehsil) {
+            btnMultiViewTehsil.classList.toggle('btn-primary', currentMultiViewMode === 'tehsil');
+            btnMultiViewTehsil.classList.toggle('btn-outline-primary', currentMultiViewMode !== 'tehsil');
+        }
+    }
+
+    btnMultiViewOverall?.addEventListener('click', () => {
+        currentMultiViewMode = 'overall';
+        updateMultiViewButtons();
+        renderAllMultiSummaryCards();
+    });
+
+    btnMultiViewDistrict?.addEventListener('click', () => {
+        currentMultiViewMode = 'district';
+        updateMultiViewButtons();
+        renderAllMultiSummaryCards();
+    });
+
+    btnMultiViewTehsil?.addEventListener('click', () => {
+        currentMultiViewMode = 'tehsil';
+        updateMultiViewButtons();
+        renderAllMultiSummaryCards();
+    });
+
+    function renderAllMultiSummaryCards() {
+        if (!multiSummaryContainer) return;
+        multiSummaryContainer.innerHTML = '';
+
+        allFileSummaries.forEach(({ fileName, results, error }, i) => {
+            if (error) {
+                renderErrorCard(fileName, error);
+            } else {
+                renderSummaryCard(fileName, results, i);
+            }
+        });
+    }
 
     multiFileInput?.addEventListener('change', async (e) => {
         const files = Array.from(e.target.files);
@@ -1764,6 +1831,7 @@ document.addEventListener('DOMContentLoaded', () => {
         multiFileStatus.innerHTML = `<span class="spinner-border spinner-border-sm me-2"></span>Processing ${files.length} file(s)...`;
         multiSummaryContainer.innerHTML = '';
         multiCopyBtnWrapper.style.display = 'none';
+        if (multiSummaryControls) multiSummaryControls.style.display = 'none';
         multiCopyFeedback.textContent = '';
         allFileSummaries = [];
 
@@ -1773,75 +1841,128 @@ document.addEventListener('DOMContentLoaded', () => {
                 const jsonData = await readExcelAsJSON(file);
                 if (jsonData && jsonData.length > 0) {
                     const summaryData = calculateSummaryForFile(jsonData);
-                    renderSummaryCard(file.name, summaryData, i);
                     allFileSummaries.push({ fileName: file.name, results: summaryData });
                 } else {
-                    renderErrorCard(file.name, "File appears to be empty.");
+                    allFileSummaries.push({ fileName: file.name, error: "File appears to be empty." });
                 }
             } catch (err) {
-                renderErrorCard(file.name, err.message);
+                allFileSummaries.push({ fileName: file.name, error: err.message });
             }
         }
         
         multiFileStatus.innerHTML = `<span class="text-success">Finished processing ${files.length} file(s).</span>`;
         multiFileInput.value = ''; // Reset input
 
-        // Show copy button only if we have at least one successful result
-        if (allFileSummaries.length > 0) {
+        renderAllMultiSummaryCards();
+
+        const hasSuccess = allFileSummaries.some(item => !item.error);
+        if (hasSuccess) {
             multiCopyBtnWrapper.style.display = 'block';
+            if (multiSummaryControls) multiSummaryControls.style.display = 'block';
         }
     });
 
     // --- COPY ALL FOR EXCEL ---
     multiCopyAllBtn?.addEventListener('click', () => {
-        if (allFileSummaries.length === 0) return;
-
-        const HEADERS = [
-            'Category',
-            'Total Users',
-            'Active Users',
-            '0 Houses',
-            'Non Active User %',
-            'Total Houses',
-            '1-5 Houses',
-            '6-10 Houses',
-            '11+ Houses'
-        ];
-
-        const buildRow = (rowName, data) => {
-            const nonActivePct = data.totalUsers > 0
-                ? ((data.dist['0'] / data.totalUsers) * 100).toFixed(2) + '%'
-                : '0.00%';
-            return [
-                rowName,
-                data.totalUsers,
-                data.activeUsers,
-                data.dist['0'],
-                nonActivePct,
-                data.totalHouses,
-                data.dist['1-5'],
-                data.dist['6-10'],
-                data.dist['11+']
-            ].join('\t');
-        };
+        const validSummaries = allFileSummaries.filter(item => !item.error);
+        if (validSummaries.length === 0) return;
 
         const tsvLines = [];
 
-        allFileSummaries.forEach(({ fileName, results }, idx) => {
-            // Blank separator between blocks (skip for first)
-            if (idx > 0) tsvLines.push('');
+        if (currentMultiViewMode === 'district') {
+            const HEADERS = [
+                'District',
+                'Total Users (All)', 'Active (All)', '0 Houses (All)', 'Non Active % (All)', 'Total Houses (All)', '1-5 (All)', '6-10 (All)', '11+ (All)',
+                'Total Users (LHW)', 'Active (LHW)', '0 Houses (LHW)', 'Non Active % (LHW)', 'Total Houses (LHW)', '1-5 (LHW)', '6-10 (LHW)', '11+ (LHW)',
+                'Total Users (CHI)', 'Active (CHI)', '0 Houses (CHI)', 'Non Active % (CHI)', 'Total Houses (CHI)', '1-5 (CHI)', '6-10 (CHI)', '11+ (CHI)'
+            ];
 
-            // File title row
-            tsvLines.push(fileName);
+            validSummaries.forEach(({ fileName, results }, idx) => {
+                if (idx > 0) tsvLines.push('');
+                tsvLines.push(fileName);
+                tsvLines.push(HEADERS.join('\t'));
 
-            // Column headers
-            tsvLines.push(HEADERS.join('\t'));
+                const districtList = results.districtWise || [];
+                districtList.forEach(g => {
+                    const formatPct = (sub) => sub.users > 0 ? ((sub.zeroHouse / sub.users) * 100).toFixed(2) + '%' : '0.00%';
+                    const line = [
+                        g.district,
+                        g.total.users, g.total.active, g.total.zeroHouse, formatPct(g.total), g.total.houses, g.total.dist['1-5'], g.total.dist['6-10'], g.total.dist['11+'],
+                        g.lhw.users, g.lhw.active, g.lhw.zeroHouse, formatPct(g.lhw), g.lhw.houses, g.lhw.dist['1-5'], g.lhw.dist['6-10'], g.lhw.dist['11+'],
+                        g.cho.users, g.cho.active, g.cho.zeroHouse, formatPct(g.cho), g.cho.houses, g.cho.dist['1-5'], g.cho.dist['6-10'], g.cho.dist['11+']
+                    ];
+                    tsvLines.push(line.join('\t'));
+                });
+            });
+        } else if (currentMultiViewMode === 'tehsil') {
+            const HEADERS = [
+                'District', 'Tehsil',
+                'Total Users (All)', 'Active (All)', '0 Houses (All)', 'Non Active % (All)', 'Total Houses (All)', '1-5 (All)', '6-10 (All)', '11+ (All)',
+                'Total Users (LHW)', 'Active (LHW)', '0 Houses (LHW)', 'Non Active % (LHW)', 'Total Houses (LHW)', '1-5 (LHW)', '6-10 (LHW)', '11+ (LHW)',
+                'Total Users (CHI)', 'Active (CHI)', '0 Houses (CHI)', 'Non Active % (CHI)', 'Total Houses (CHI)', '1-5 (CHI)', '6-10 (CHI)', '11+ (CHI)'
+            ];
 
-            // Data rows
-            tsvLines.push(buildRow('Overall Users', results.overall));
-            tsvLines.push(buildRow('Lady Health Workers (LHW)', results.lhw));
-            tsvLines.push(buildRow('Community Health Inspector (CHI)', results.cho));
-        });
+            validSummaries.forEach(({ fileName, results }, idx) => {
+                if (idx > 0) tsvLines.push('');
+                tsvLines.push(fileName);
+                tsvLines.push(HEADERS.join('\t'));
+
+                const tehsilList = results.tehsilWise || [];
+                tehsilList.forEach(g => {
+                    const formatPct = (sub) => sub.users > 0 ? ((sub.zeroHouse / sub.users) * 100).toFixed(2) + '%' : '0.00%';
+                    const line = [
+                        g.district, g.tehsil,
+                        g.total.users, g.total.active, g.total.zeroHouse, formatPct(g.total), g.total.houses, g.total.dist['1-5'], g.total.dist['6-10'], g.total.dist['11+'],
+                        g.lhw.users, g.lhw.active, g.lhw.zeroHouse, formatPct(g.lhw), g.lhw.houses, g.lhw.dist['1-5'], g.lhw.dist['6-10'], g.lhw.dist['11+'],
+                        g.cho.users, g.cho.active, g.cho.zeroHouse, formatPct(g.cho), g.cho.houses, g.cho.dist['1-5'], g.cho.dist['6-10'], g.cho.dist['11+']
+                    ];
+                    tsvLines.push(line.join('\t'));
+                });
+            });
+        } else {
+            // Overall Mode
+            const HEADERS = [
+                'Category',
+                'Total Users',
+                'Active Users',
+                '0 Houses',
+                'Non Active User %',
+                'Total Houses',
+                '1-5 Houses',
+                '6-10 Houses',
+                '11+ Houses'
+            ];
+
+            const buildRow = (rowName, data) => {
+                const nonActivePct = data.totalUsers > 0
+                    ? ((data.dist['0'] / data.totalUsers) * 100).toFixed(2) + '%'
+                    : '0.00%';
+                return [
+                    rowName,
+                    data.totalUsers,
+                    data.activeUsers,
+                    data.dist['0'],
+                    nonActivePct,
+                    data.totalHouses,
+                    data.dist['1-5'],
+                    data.dist['6-10'],
+                    data.dist['11+']
+                ].join('\t');
+            };
+
+            validSummaries.forEach(({ fileName, results }, idx) => {
+                if (idx > 0) tsvLines.push('');
+                tsvLines.push(fileName);
+                tsvLines.push(HEADERS.join('\t'));
+
+                tsvLines.push(buildRow('Overall Users', results.overall));
+                tsvLines.push(buildRow('Lady Health Workers (LHW)', results.lhw));
+                tsvLines.push(buildRow('Community Health Inspector (CHI)', results.cho));
+                if (results.fww && results.fww.totalUsers > 0) {
+                    tsvLines.push(buildRow('Family Welfare Worker (FWW)', results.fww));
+                }
+            });
+        }
 
         const tsvText = tsvLines.join('\n');
 
@@ -1854,7 +1975,6 @@ document.addEventListener('DOMContentLoaded', () => {
         };
 
         navigator.clipboard.writeText(tsvText).then(showSuccess).catch(() => {
-            // Fallback for browsers that block clipboard API
             const ta = document.createElement('textarea');
             ta.value = tsvText;
             ta.style.position = 'fixed';
@@ -1908,79 +2028,403 @@ document.addEventListener('DOMContentLoaded', () => {
             return { totalUsers, activeUsers, totalHouses, dist };
         };
 
-        const LHW_KEYWORDS = ['lady health worker', 'lhw'];
-        const CHO_KEYWORDS = ['community health officer', 'cho', 'chi', 'community health inspector'];
+        const lhwData = data.filter(row => isRowLHW(row[roleCol]));
+        const choData = data.filter(row => isRowCHO(row[roleCol]));
+        const fwwData = data.filter(row => isRowFWW(row[roleCol]));
 
-        const lhwData = data.filter(row => {
-            const val = String(row[roleCol] || '').trim().toLowerCase();
-            return LHW_KEYWORDS.includes(val);
+        // --- District Wise Extraction ---
+        const districtCol = getLocColumn('districtCol', headers);
+        const uniqueDistricts = [];
+        const seenDistricts = new Set();
+        data.forEach(row => {
+            const district = String(row[districtCol] || 'N/A').trim();
+            const normDist = district.toLowerCase();
+            if (!seenDistricts.has(normDist)) {
+                seenDistricts.add(normDist);
+                uniqueDistricts.push(district);
+            }
         });
 
-        const choData = data.filter(row => {
-            const val = String(row[roleCol] || '').toLowerCase();
-            return CHO_KEYWORDS.some(k => val.includes(k));
+        const distGroups = {};
+        uniqueDistricts.forEach(dist => {
+            const emptyGroup = () => ({
+                users: 0,
+                active: 0,
+                zeroHouse: 0,
+                houses: 0,
+                dist: { '0': 0, '1-5': 0, '6-10': 0, '11+': 0 }
+            });
+            distGroups[dist.toLowerCase()] = {
+                district: dist,
+                total: emptyGroup(),
+                lhw: emptyGroup(),
+                cho: emptyGroup()
+            };
+        });
+
+        data.forEach(row => {
+            const district = String(row[districtCol] || 'N/A').trim();
+            const normDist = district.toLowerCase();
+            const group = distGroups[normDist];
+            if (group) {
+                const isLHW = isRowLHW(row[roleCol]);
+                const isCHO = isRowCHO(row[roleCol]);
+
+                let houseCount = row[houseCol];
+                if (houseCount === "-" || houseCount === "" || houseCount === undefined || houseCount === null) {
+                    houseCount = 0;
+                } else {
+                    houseCount = parseInt(houseCount) || 0;
+                }
+
+                const updateSubgroup = (g) => {
+                    g.users++;
+                    g.houses += houseCount;
+                    if (houseCount !== 0) g.active++;
+                    else g.zeroHouse++;
+
+                    if (houseCount === 0) g.dist['0']++;
+                    else if (houseCount >= 1 && houseCount <= 5) g.dist['1-5']++;
+                    else if (houseCount >= 6 && houseCount <= 10) g.dist['6-10']++;
+                    else if (houseCount >= 11) g.dist['11+']++;
+                };
+
+                updateSubgroup(group.total);
+                if (isLHW) updateSubgroup(group.lhw);
+                if (isCHO) updateSubgroup(group.cho);
+            }
+        });
+
+        // --- Tehsil Wise Extraction ---
+        const tehsilCol = getLocColumn('tehsilCol', headers);
+        const uniqueTehsils = [];
+        const seenTehKeys = new Set();
+        data.forEach(row => {
+            const district = String(row[districtCol] || 'N/A').trim();
+            const tehsil = String(row[tehsilCol] || 'N/A').trim();
+            const normKey = `${district.toLowerCase()}||${tehsil.toLowerCase()}`;
+            if (!seenTehKeys.has(normKey)) {
+                seenTehKeys.add(normKey);
+                uniqueTehsils.push({ district, tehsil, normKey });
+            }
+        });
+
+        const tehGroups = {};
+        uniqueTehsils.forEach(item => {
+            const emptyGroup = () => ({
+                users: 0,
+                active: 0,
+                zeroHouse: 0,
+                houses: 0,
+                dist: { '0': 0, '1-5': 0, '6-10': 0, '11+': 0 }
+            });
+            tehGroups[item.normKey] = {
+                district: item.district,
+                tehsil: item.tehsil,
+                total: emptyGroup(),
+                lhw: emptyGroup(),
+                cho: emptyGroup()
+            };
+        });
+
+        data.forEach(row => {
+            const district = String(row[districtCol] || 'N/A').trim();
+            const tehsil = String(row[tehsilCol] || 'N/A').trim();
+            const normKey = `${district.toLowerCase()}||${tehsil.toLowerCase()}`;
+            const group = tehGroups[normKey];
+            if (group) {
+                const isLHW = isRowLHW(row[roleCol]);
+                const isCHO = isRowCHO(row[roleCol]);
+
+                let houseCount = row[houseCol];
+                if (houseCount === "-" || houseCount === "" || houseCount === undefined || houseCount === null) {
+                    houseCount = 0;
+                } else {
+                    houseCount = parseInt(houseCount) || 0;
+                }
+
+                const updateSubgroup = (g) => {
+                    g.users++;
+                    g.houses += houseCount;
+                    if (houseCount !== 0) g.active++;
+                    else g.zeroHouse++;
+
+                    if (houseCount === 0) g.dist['0']++;
+                    else if (houseCount >= 1 && houseCount <= 5) g.dist['1-5']++;
+                    else if (houseCount >= 6 && houseCount <= 10) g.dist['6-10']++;
+                    else if (houseCount >= 11) g.dist['11+']++;
+                };
+
+                updateSubgroup(group.total);
+                if (isLHW) updateSubgroup(group.lhw);
+                if (isCHO) updateSubgroup(group.cho);
+            }
         });
 
         return {
             overall: analyze(data),
             lhw: analyze(lhwData),
-            cho: analyze(choData)
+            cho: analyze(choData),
+            fww: analyze(fwwData),
+            districtWise: Object.values(distGroups),
+            tehsilWise: Object.values(tehGroups)
         };
     }
 
     function renderSummaryCard(fileName, results, index) {
-        const rows = [
-            { name: 'Overall Users', data: results.overall, class: 'fw-bold' },
-            { name: 'Lady Health Workers (LHW)', data: results.lhw, class: '' },
-            { name: 'Community Health Inspector (CHI)', data: results.cho, class: '' }
-        ];
+        let modeBadge = '';
+        let tableHTML = '';
 
-        const tbodyHTML = rows.map(row => {
-            const nonActivePct = row.data.totalUsers > 0
-                ? ((row.data.dist['0'] / row.data.totalUsers) * 100).toFixed(2) + '%'
-                : '0.00%';
+        const formatPct = (sub) => sub.users > 0 ? ((sub.zeroHouse / sub.users) * 100).toFixed(2) + '%' : '0.00%';
 
-            return `
-                <tr class="${row.class}">
-                    <td>${row.name}</td>
-                    <td>${row.data.totalUsers.toLocaleString()}</td>
-                    <td>${row.data.activeUsers.toLocaleString()}</td>
-                    <td>${row.data.dist['0'].toLocaleString()}</td>
-                    <td class="text-danger fw-bold">${nonActivePct}</td>
-                    <td>${row.data.totalHouses.toLocaleString()}</td>
-                    <td>${row.data.dist['1-5'].toLocaleString()}</td>
-                    <td>${row.data.dist['6-10'].toLocaleString()}</td>
-                    <td>${row.data.dist['11+'].toLocaleString()}</td>
-                </tr>
+        if (currentMultiViewMode === 'district') {
+            modeBadge = `<span class="badge bg-info ms-2"><i class="fas fa-city me-1"></i> District Wise</span>`;
+            const districtList = results.districtWise || [];
+            
+            let tbodyContent = '';
+            if (districtList.length === 0) {
+                tbodyContent = `<tr><td colspan="25" class="text-center py-4 text-muted">No District data available in this file.</td></tr>`;
+            } else {
+                tbodyContent = districtList.map(g => `
+                    <tr>
+                        <td class="fw-bold">${g.district}</td>
+                        
+                        <!-- Overall -->
+                        <td class="table-primary-light">${g.total.users}</td>
+                        <td class="table-primary-light">${g.total.active}</td>
+                        <td class="table-primary-light">${g.total.zeroHouse}</td>
+                        <td class="table-primary-light text-danger fw-bold">${formatPct(g.total)}</td>
+                        <td class="table-primary-light">${g.total.houses.toLocaleString()}</td>
+                        <td class="table-primary-light">${g.total.dist['1-5']}</td>
+                        <td class="table-primary-light">${g.total.dist['6-10']}</td>
+                        <td class="table-primary-light">${g.total.dist['11+']}</td>
+                        
+                        <!-- LHW -->
+                        <td class="table-info-light">${g.lhw.users}</td>
+                        <td class="table-info-light">${g.lhw.active}</td>
+                        <td class="table-info-light">${g.lhw.zeroHouse}</td>
+                        <td class="table-info-light text-danger fw-bold">${formatPct(g.lhw)}</td>
+                        <td class="table-info-light">${g.lhw.houses.toLocaleString()}</td>
+                        <td class="table-info-light">${g.lhw.dist['1-5']}</td>
+                        <td class="table-info-light">${g.lhw.dist['6-10']}</td>
+                        <td class="table-info-light">${g.lhw.dist['11+']}</td>
+                        
+                        <!-- CHI -->
+                        <td class="table-success-light">${g.cho.users}</td>
+                        <td class="table-success-light">${g.cho.active}</td>
+                        <td class="table-success-light">${g.cho.zeroHouse}</td>
+                        <td class="table-success-light text-danger fw-bold">${formatPct(g.cho)}</td>
+                        <td class="table-success-light">${g.cho.houses.toLocaleString()}</td>
+                        <td class="table-success-light">${g.cho.dist['1-5']}</td>
+                        <td class="table-success-light">${g.cho.dist['6-10']}</td>
+                        <td class="table-success-light">${g.cho.dist['11+']}</td>
+                    </tr>
+                `).join('');
+            }
+
+            tableHTML = `
+                <div class="table-responsive">
+                    <table class="table table-hover table-bordered mb-0" style="min-width: 1400px;">
+                        <thead class="table-dark">
+                            <tr>
+                                <th rowspan="2" class="align-middle">District</th>
+                                <th colspan="8" class="text-center bg-primary">Overall Stats</th>
+                                <th colspan="8" class="text-center bg-info">Lady Health Workers (LHW)</th>
+                                <th colspan="8" class="text-center bg-success">Community Health Officers (CHO)</th>
+                            </tr>
+                            <tr>
+                                <th>Total Users</th>
+                                <th>Active</th>
+                                <th>0 Houses</th>
+                                <th>Non Active %</th>
+                                <th>Total Houses</th>
+                                <th>1-5</th>
+                                <th>6-10</th>
+                                <th>11+</th>
+                                
+                                <th>Total Users</th>
+                                <th>Active</th>
+                                <th>0 Houses</th>
+                                <th>Non Active %</th>
+                                <th>Total Houses</th>
+                                <th>1-5</th>
+                                <th>6-10</th>
+                                <th>11+</th>
+                                
+                                <th>Total Users</th>
+                                <th>Active</th>
+                                <th>0 Houses</th>
+                                <th>Non Active %</th>
+                                <th>Total Houses</th>
+                                <th>1-5</th>
+                                <th>6-10</th>
+                                <th>11+</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${tbodyContent}
+                        </tbody>
+                    </table>
+                </div>
             `;
-        }).join('');
+        } else if (currentMultiViewMode === 'tehsil') {
+            modeBadge = `<span class="badge bg-success ms-2"><i class="fas fa-map-marked-alt me-1"></i> Tehsil Wise</span>`;
+            const tehsilList = results.tehsilWise || [];
+            
+            let tbodyContent = '';
+            if (tehsilList.length === 0) {
+                tbodyContent = `<tr><td colspan="26" class="text-center py-4 text-muted">No Tehsil data available in this file.</td></tr>`;
+            } else {
+                tbodyContent = tehsilList.map(g => `
+                    <tr>
+                        <td class="fw-bold">${g.district}</td>
+                        <td class="fw-bold">${g.tehsil}</td>
+                        
+                        <!-- Overall -->
+                        <td class="table-primary-light">${g.total.users}</td>
+                        <td class="table-primary-light">${g.total.active}</td>
+                        <td class="table-primary-light">${g.total.zeroHouse}</td>
+                        <td class="table-primary-light text-danger fw-bold">${formatPct(g.total)}</td>
+                        <td class="table-primary-light">${g.total.houses.toLocaleString()}</td>
+                        <td class="table-primary-light">${g.total.dist['1-5']}</td>
+                        <td class="table-primary-light">${g.total.dist['6-10']}</td>
+                        <td class="table-primary-light">${g.total.dist['11+']}</td>
+                        
+                        <!-- LHW -->
+                        <td class="table-info-light">${g.lhw.users}</td>
+                        <td class="table-info-light">${g.lhw.active}</td>
+                        <td class="table-info-light">${g.lhw.zeroHouse}</td>
+                        <td class="table-info-light text-danger fw-bold">${formatPct(g.lhw)}</td>
+                        <td class="table-info-light">${g.lhw.houses.toLocaleString()}</td>
+                        <td class="table-info-light">${g.lhw.dist['1-5']}</td>
+                        <td class="table-info-light">${g.lhw.dist['6-10']}</td>
+                        <td class="table-info-light">${g.lhw.dist['11+']}</td>
+                        
+                        <!-- CHI -->
+                        <td class="table-success-light">${g.cho.users}</td>
+                        <td class="table-success-light">${g.cho.active}</td>
+                        <td class="table-success-light">${g.cho.zeroHouse}</td>
+                        <td class="table-success-light text-danger fw-bold">${formatPct(g.cho)}</td>
+                        <td class="table-success-light">${g.cho.houses.toLocaleString()}</td>
+                        <td class="table-success-light">${g.cho.dist['1-5']}</td>
+                        <td class="table-success-light">${g.cho.dist['6-10']}</td>
+                        <td class="table-success-light">${g.cho.dist['11+']}</td>
+                    </tr>
+                `).join('');
+            }
+
+            tableHTML = `
+                <div class="table-responsive">
+                    <table class="table table-hover table-bordered mb-0" style="min-width: 1600px;">
+                        <thead class="table-dark">
+                            <tr>
+                                <th rowspan="2" class="align-middle">District</th>
+                                <th rowspan="2" class="align-middle">Tehsil</th>
+                                <th colspan="8" class="text-center bg-primary">Overall Stats</th>
+                                <th colspan="8" class="text-center bg-info">Lady Health Workers (LHW)</th>
+                                <th colspan="8" class="text-center bg-success">Community Health Officers (CHO)</th>
+                            </tr>
+                            <tr>
+                                <th>Total Users</th>
+                                <th>Active</th>
+                                <th>0 Houses</th>
+                                <th>Non Active %</th>
+                                <th>Total Houses</th>
+                                <th>1-5</th>
+                                <th>6-10</th>
+                                <th>11+</th>
+                                
+                                <th>Total Users</th>
+                                <th>Active</th>
+                                <th>0 Houses</th>
+                                <th>Non Active %</th>
+                                <th>Total Houses</th>
+                                <th>1-5</th>
+                                <th>6-10</th>
+                                <th>11+</th>
+                                
+                                <th>Total Users</th>
+                                <th>Active</th>
+                                <th>0 Houses</th>
+                                <th>Non Active %</th>
+                                <th>Total Houses</th>
+                                <th>1-5</th>
+                                <th>6-10</th>
+                                <th>11+</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${tbodyContent}
+                        </tbody>
+                    </table>
+                </div>
+            `;
+        } else {
+            // Overall Mode
+            modeBadge = `<span class="badge bg-primary ms-2"><i class="fas fa-list-check me-1"></i> Overall Summary</span>`;
+            const rows = [
+                { name: 'Overall Users', data: results.overall, class: 'fw-bold' },
+                { name: 'Lady Health Workers (LHW)', data: results.lhw, class: '' },
+                { name: 'Community Health Inspector (CHI)', data: results.cho, class: '' }
+            ];
+
+            if (results.fww && results.fww.totalUsers > 0) {
+                rows.push({ name: 'Family Welfare Worker (FWW)', data: results.fww, class: '' });
+            }
+
+            const tbodyHTML = rows.map(row => {
+                const nonActivePct = row.data.totalUsers > 0
+                    ? ((row.data.dist['0'] / row.data.totalUsers) * 100).toFixed(2) + '%'
+                    : '0.00%';
+
+                return `
+                    <tr class="${row.class}">
+                        <td>${row.name}</td>
+                        <td>${row.data.totalUsers.toLocaleString()}</td>
+                        <td>${row.data.activeUsers.toLocaleString()}</td>
+                        <td>${row.data.dist['0'].toLocaleString()}</td>
+                        <td class="text-danger fw-bold">${nonActivePct}</td>
+                        <td>${row.data.totalHouses.toLocaleString()}</td>
+                        <td>${row.data.dist['1-5'].toLocaleString()}</td>
+                        <td>${row.data.dist['6-10'].toLocaleString()}</td>
+                        <td>${row.data.dist['11+'].toLocaleString()}</td>
+                    </tr>
+                `;
+            }).join('');
+
+            tableHTML = `
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Category</th>
+                                <th>Total Users</th>
+                                <th>Active Users</th>
+                                <th>0 Houses</th>
+                                <th>non active user %</th>
+                                <th>Total Houses</th>
+                                <th>1-5 Houses</th>
+                                <th>6-10 Houses</th>
+                                <th>11+ Houses</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${tbodyHTML}
+                        </tbody>
+                    </table>
+                </div>
+            `;
+        }
 
         const cardHTML = `
             <div class="dashboard-card mb-4">
-                <div class="card-header d-flex justify-content-between align-items-center">
-                    <h3 class="card-title text-primary"><i class="fas fa-file-excel me-2"></i> ${fileName}</h3>
+                <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+                    <h3 class="card-title text-primary mb-0">
+                        <i class="fas fa-file-excel me-2"></i> ${fileName} ${modeBadge}
+                    </h3>
                 </div>
                 <div class="card-body p-0">
-                    <div class="table-responsive">
-                        <table class="table table-hover mb-0">
-                            <thead class="table-light">
-                                <tr>
-                                    <th>Category</th>
-                                    <th>Total Users</th>
-                                    <th>Active Users</th>
-                                    <th>0 Houses</th>
-                                    <th>non active user %</th>
-                                    <th>Total Houses</th>
-                                    <th>1-5 Houses</th>
-                                    <th>6-10 Houses</th>
-                                    <th>11+ Houses</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                ${tbodyHTML}
-                            </tbody>
-                        </table>
-                    </div>
+                    ${tableHTML}
                 </div>
             </div>
         `;

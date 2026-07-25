@@ -265,7 +265,8 @@
 
         <div class="form-group">
             <label for="categorySelect">3. Choose inspector category</label>
-            <select id="categorySelect" style="width: 100%; padding: 0.9rem; border-radius: 12px; border: 1px solid rgba(148, 163, 184, 0.7); background: rgba(15, 23, 42, 0.8); color: var(--text-main);">
+            <select id="categorySelect"
+                style="width: 100%; padding: 0.9rem; border-radius: 12px; border: 1px solid rgba(148, 163, 184, 0.7); background: rgba(15, 23, 42, 0.8); color: var(--text-main);">
                 <option value="chi">Community Health Inspector</option>
                 <option value="lhw">Lady Health Worker</option>
             </select>
@@ -444,86 +445,86 @@
 
                         matchedDesignationCount++;
 
-                            // Find CNIC field - specifically prioritize 'cnicofcadre' for the first file per user instruction
-                            const cnicKey = findKey(row, ['cnicofcadre', 'cnic', 'idm', 'cadrecnic', 'id', 'cadre']);
-                            if (!cnicKey || !row[cnicKey]) continue;
+                        // Find CNIC field - specifically prioritize 'cnicofcadre' for the first file per user instruction
+                        const cnicKey = findKey(row, ['cnicofcadre', 'cnic', 'idm', 'cadrecnic', 'id', 'cadre']);
+                        if (!cnicKey || !row[cnicKey]) continue;
 
-                            const targetCnic = String(row[cnicKey]).trim();
-                            // Some CNICs might have decimals if read poorly e.g., 34101.0, clean up completely
-                            const normalizeCnic = c => {
-                                let str = String(c).split('.')[0]; // remove decimal part if read as float
-                                return str.replace(/[^0-9]/g, ''); // keep only numbers
-                            };
-                            const normalizedTargetCnic = normalizeCnic(targetCnic);
+                        const targetCnic = String(row[cnicKey]).trim();
+                        // Some CNICs might have decimals if read poorly e.g., 34101.0, clean up completely
+                        const normalizeCnic = c => {
+                            let str = String(c).split('.')[0]; // remove decimal part if read as float
+                            return str.replace(/[^0-9]/g, ''); // keep only numbers
+                        };
+                        const normalizedTargetCnic = normalizeCnic(targetCnic);
 
-                            if (!normalizedTargetCnic || normalizedTargetCnic.length < 5) continue; // safety check
+                        if (!normalizedTargetCnic || normalizedTargetCnic.length < 5) continue; // safety check
 
-                            // Match in user profile data - specifically prioritize 'username' since CNIC is stored there per user instruction
-                            const profileMatch = userProfileData.find(pRow => {
-                                const pCnicKey = findKey(pRow, ['username', 'cnic', 'nationalid', 'idnumber', 'identity', 'id']);
-                                if (!pCnicKey || !pRow[pCnicKey]) return false;
-                                return normalizeCnic(pRow[pCnicKey]) === normalizedTargetCnic;
-                            });
+                        // Match in user profile data - specifically prioritize 'username' since CNIC is stored there per user instruction
+                        const profileMatch = userProfileData.find(pRow => {
+                            const pCnicKey = findKey(pRow, ['username', 'cnic', 'nationalid', 'idnumber', 'identity', 'id']);
+                            if (!pCnicKey || !pRow[pCnicKey]) return false;
+                            return normalizeCnic(pRow[pCnicKey]) === normalizedTargetCnic;
+                        });
 
-                            if (profileMatch) {
-                                // Extract required fields
+                        if (profileMatch) {
+                            // Extract required fields
 
-                                // 1. Phone from profile
-                                const phoneKey = findKey(profileMatch, ['phone', 'contact', 'mobile', 'cell']);
-                                const phone = phoneKey ? String(profileMatch[phoneKey]).trim() : 'Not Available';
+                            // 1. Phone from profile
+                            const phoneKey = findKey(profileMatch, ['phone', 'contact', 'mobile', 'cell']);
+                            const phone = phoneKey ? String(profileMatch[phoneKey]).trim() : 'Not Available';
 
-                                // 2. Tehsil from non-reporting, fallback to profile
-                                let tehsilKey = findKey(row, ['tehsil', 'district']);
-                                let tehsil = tehsilKey ? row[tehsilKey] : null;
-                                if (!tehsil) {
-                                    let pTehsilKey = findKey(profileMatch, ['tehsil', 'district']);
-                                    tehsil = pTehsilKey ? profileMatch[pTehsilKey] : 'Not Available';
-                                }
-
-                                // 3. Name from non-reporting, fallback to profile
-                                let nameKey = findKey(row, ['name', 'fullname', 'user']);
-                                let name = nameKey ? row[nameKey] : null;
-                                if (!name) {
-                                    let pNameKey = findKey(profileMatch, ['name', 'fullname', 'user']);
-                                    name = pNameKey ? profileMatch[pNameKey] : 'Not Available';
-                                }
-
-                                finalData.push({
-                                    "Tehsil": tehsil,
-                                    "Designation": designationValue,
-                                    "Name": name,
-                                    "CNIC Number": targetCnic,
-                                    "Phone Number": phone
-                                });
+                            // 2. Tehsil from non-reporting, fallback to profile
+                            let tehsilKey = findKey(row, ['tehsil', 'district']);
+                            let tehsil = tehsilKey ? row[tehsilKey] : null;
+                            if (!tehsil) {
+                                let pTehsilKey = findKey(profileMatch, ['tehsil', 'district']);
+                                tehsil = pTehsilKey ? profileMatch[pTehsilKey] : 'Not Available';
                             }
+
+                            // 3. Name from non-reporting, fallback to profile
+                            let nameKey = findKey(row, ['name', 'fullname', 'user']);
+                            let name = nameKey ? row[nameKey] : null;
+                            if (!name) {
+                                let pNameKey = findKey(profileMatch, ['name', 'fullname', 'user']);
+                                name = pNameKey ? profileMatch[pNameKey] : 'Not Available';
+                            }
+
+                            finalData.push({
+                                "Tehsil": tehsil,
+                                "Designation": designationValue,
+                                "Name": name,
+                                "CNIC Number": targetCnic,
+                                "Phone Number": phone
+                            });
                         }
                     }
                 }
+            }
 
                 if (finalData.length === 0) {
-                    if (matchedDesignationCount === 0) {
-                        setStatus(`<strong>No matches found.</strong> Processed ${checkedCount} rows. We couldn't find any designation matching '${categoryLabel}'. Please check the column name or spelling in the first file.`, 'error');
-                    } else {
-                        setStatus(`<strong>No matches found.</strong> Processed ${checkedCount} rows. Found ${matchedDesignationCount} ${categoryLabel}s, but none of their CNICs matched the User Profile file. Ensure CNICs are formatted correctly.`, 'error');
-                    }
+                if (matchedDesignationCount === 0) {
+                    setStatus(`<strong>No matches found.</strong> Processed ${checkedCount} rows. We couldn't find any designation matching '${categoryLabel}'. Please check the column name or spelling in the first file.`, 'error');
                 } else {
-                    const newSheet = XLSX.utils.json_to_sheet(finalData);
-                    const newWorkbook = XLSX.utils.book_new();
-                    XLSX.utils.book_append_sheet(newWorkbook, newSheet, "Compiled Data");
-
-                    XLSX.writeFile(newWorkbook, outputFileName);
-
-                    setStatus(`<strong>Success!</strong> Found ${matchedDesignationCount} ${categoryLabel}s and successfully matched ${finalData.length} of them against profiles. Your new Excel file has been generated!`, 'success');
+                    setStatus(`<strong>No matches found.</strong> Processed ${checkedCount} rows. Found ${matchedDesignationCount} ${categoryLabel}s, but none of their CNICs matched the User Profile file. Ensure CNICs are formatted correctly.`, 'error');
                 }
+            } else {
+                const newSheet = XLSX.utils.json_to_sheet(finalData);
+                const newWorkbook = XLSX.utils.book_new();
+                XLSX.utils.book_append_sheet(newWorkbook, newSheet, "Compiled Data");
 
-            } catch (err) {
-                console.error(err);
-                setStatus('<strong>Error occurred processing files:</strong> ' + err.message, 'error');
-            } finally {
-                processBtn.disabled = false;
-                spinner.style.display = 'none';
-                btnText.textContent = 'Process Files and Download Excel';
+                XLSX.writeFile(newWorkbook, outputFileName);
+
+                setStatus(`<strong>Success!</strong> Found ${matchedDesignationCount} ${categoryLabel}s and successfully matched ${finalData.length} of them against profiles. Your new Excel file has been generated!`, 'success');
             }
+
+        } catch (err) {
+            console.error(err);
+            setStatus('<strong>Error occurred processing files:</strong> ' + err.message, 'error');
+        } finally {
+            processBtn.disabled = false;
+            spinner.style.display = 'none';
+            btnText.textContent = 'Process Files and Download Excel';
+        }
         });
     </script>
     <footer class="page-footer">
